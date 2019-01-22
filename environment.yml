@@ -1,0 +1,25 @@
+name: fmippn
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.7
+  - numpy
+  - scipy
+  - matplotlib
+  - pyproj
+  - pillow
+  - h5py
+  - hdf5
+  - netcdf4
+  - xarray
+  - cython
+  - git 
+  - pylint
+  - attrdict
+  - jsmin
+  - jsonschema
+  - opencv
+  - dask
+  - pyfftw
+  - toolz
