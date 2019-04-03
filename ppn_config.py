@@ -46,6 +46,9 @@ defaults = {
     "FFT_METHOD": "pyfftw",
     "GENERATE_ENSEMBLE": True,
     "GENERATE_DETERMINISTIC": False,
+    # Z-R conversion parameters
+    "ZR_A": 223.,
+    "ZR_B": 1.53,
     # Nowcasting parameters
     "NUM_PREV_OBSERVATIONS": 3,
     "NOWCAST_TIMESTEP": 5,
@@ -58,12 +61,16 @@ defaults = {
     "R_THRESHOLD": 0.1,
     "KMPERPIXEL": 1.0,
     "VEL_PERT_METHOD": "bps",
+    "SEED": None,  # Default value in pysteps is None
     # Storing parameters
+    "FIELD_VALUES": "RRATE",  # Store values as RRATE or DBZ
     "OUTPUT_PATH": None,  # None uses pystepsrc output path
     "OUTPUT_TIME_FORMAT": "%Y-%m-%d %H:%M:%S",
     "STORE_ENSEMBLE": True, # Write each ensemble member to output
     "STORE_DETERMINISTIC": False,  # Write det_fct to output
     "STORE_MOTION": False, # Write motion to output
+    "SCALER": 100,
+    "SCALE_ZERO": "auto",  # Value for "0" in scaled units. Set to "auto" or None for minimum value found before scaling
     # Logging parameters
     "WRITE_LOG": False,
     "LOG_LEVEL": logging.INFO  # see logging module documentation for valid levels
@@ -78,18 +85,27 @@ dev = {
     "ENSEMBLE_SIZE": 5,
     "WRITE_LOG": False,
     "STORE_ENSEMBLE": True,
-
+    "GENERATE_DETERMINISTIC": True,
+    "STORE_DETERMINISTIC": True,
+    "STORE_MOTION": True,
+    "SEED": 0,
+    "FIELD_VALUES": "DBZ",
+    "SCALER": 10,
 }
 
 verification = {
-    "DOMAIN": "fmi_archive",
-    "MAX_LEADTIME": 360,
+    "DOMAIN": "verification",
+    "MAX_LEADTIME": 180,
     "ENSEMBLE_SIZE": 50,
+    "NUM_WORKERS": 30,
     "WRITE_LOG": True,
     "LOG_LEVEL": logging.INFO,
     "STORE_ENSEMBLE": True,
     "STORE_MOTION": True,
-    "OUTPUT_PATH": "~/devel/fmippn/out/cases",
+    "GENERATE_DETERMINISTIC": True,
+    "STORE_DETERMINISTIC": True,
+    "OUTPUT_PATH": "~/tmp-data",
+    "SEED": 201905010421,
 }
 
 road_weather = {
@@ -104,4 +120,7 @@ road_weather = {
     "GENERATE_DETERMINISTIC": True,
     "GENERATE_ENSEMBLE": False,
     "OUTPUT_PATH": "~/devel/fmippn/out/road",
+    "SEED": 1234567890,
+    "FIELD_VALUES": "DBZ",
+    "SCALER": 10,
 }

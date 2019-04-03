@@ -92,15 +92,16 @@ def run(timestamp=None, config=None, **kwargs):
 
     time_at_start = dt.datetime.today()
 
-    observations, _unused_metadata = read_observations(startdate, datasource, importer)
+    observations, obs_metadata = read_observations(startdate, datasource, importer)
 
     motion_field = optflow(observations)
 
-    ensemble_forecast = generate(observations, motion_field, nowcaster,
-                                 nowcast_kwargs)
+    ensemble_forecast, ens_meta = generate(observations, motion_field, nowcaster,
+                                           nowcast_kwargs, metadata=obs_metadata)
 
-    deterministic = generate_deterministic(observations, motion_field, nowcaster,
-                                           nowcast_kwargs)
+
+    deterministic, det_meta = generate_deterministic(observations, motion_field, nowcaster,
+                                                     nowcast_kwargs, metadata=obs_metadata)
 
     time_at_end = dt.datetime.today()
     log("debug", "Finished nowcasting at %s" % time_at_end)
@@ -112,9 +113,20 @@ def run(timestamp=None, config=None, **kwargs):
         "det_fct": deterministic,
     }
 
+    # Metadata for storage
+    store_meta = dict()
+
+    if "unit" in ens_meta:
+        unit = ens_meta["unit"]
+    elif "unit" in det_meta:
+        unit = det_meta["unit"]
+    else:
+        unit = "Unknown"
+    store_meta["unit"] = unit
+    store_meta["seed"] = PD["SEED"]
 
     # WRITE OUTPUT TO A FILE
-    write_to_file(startdate, gen_output, time_at_start, time_at_end, nc_fname)
+    write_to_file(startdate, gen_output, time_at_start, time_at_end, nc_fname, store_meta)
     log("info", "Finished writing output to a file.")
 
     log("info", "Run complete. Exiting.")
@@ -228,6 +240,7 @@ def generate_pysteps_setup():
         "fft_method": PD["FFT_METHOD"],
         "n_ens_members": PD["ENSEMBLE_SIZE"],
         "vel_pert_method": PD["VEL_PERT_METHOD"],
+        "seed": PD["SEED"],
     }
 
     # R_MIN needs to be transformed to decibel, so that comparisons can be done
@@ -257,19 +270,26 @@ def read_observations(startdate, datasource, importer):
         log("error", "OSError was raised, see output for traceback")
         raise
 
+    # PGM files contain dBZ values
     obs, _, metadata = pysteps.io.readers.read_timeseries(filelist,
                                                           importer,
                                                           **datasource["importer_kwargs"])
 
+    # TODO: Refactor the conversion into own method
+    # TODO: Check if optical flow and FFT methods work also for dBZ values, not just dBR values
+    # Converting dBZ to rain rate
+    obs, metadata = pysteps.utils.conversion.to_rainrate(obs, metadata, PD["ZR_A"], PD["ZR_B"])
+
     # NaNs need to be converted to finite values before decibel transformation
-    # Decibel transformation is done for FFT calculations
     obs[~np.isfinite(obs)] = metadata["zerovalue"]
-    obs = pysteps.utils.transformation.dB_transform(obs)[0]
+
+    # Decibel transformation (R -> dBR) is done for FFT calculations
+    obs, metadata = pysteps.utils.transformation.dB_transform(obs, metadata)
 
     return obs, metadata
 
 
-def generate(observations, motion_field, nowcaster, nowcast_kwargs):
+def generate(observations, motion_field, nowcaster, nowcast_kwargs, metadata=None):
     """Generate ensemble nowcast using pysteps nowcaster."""
     if PD["GENERATE_ENSEMBLE"]:
         fct = nowcaster(observations,
@@ -277,14 +297,18 @@ def generate(observations, motion_field, nowcaster, nowcast_kwargs):
                         PD["NUM_TIMESTEPS"],
                         **nowcast_kwargs)
 
-        fct = pysteps.utils.transformation.dB_transform(fct, inverse=True)[0]
+        fct, meta = pysteps.utils.transformation.dB_transform(fct, metadata, inverse=True)
+        # Convert to dBZ if wanted, RRATE units are default units
+        if PD["FIELD_VALUES"] == "DBZ":
+            fct, meta = pysteps.utils.conversion.to_reflectivity(fct, meta, PD["ZR_A"], PD["ZR_B"])
     else:
-        fct = None
+        fct, meta = None, dict()
 
-    return fct
+    return fct, meta
 
 
-def generate_deterministic(observations, motion_field, nowcaster, nowcast_kwargs):
+def generate_deterministic(observations, motion_field, nowcaster, nowcast_kwargs,
+                           metadata=None):
     """Generate deterministic nowcast using pysteps nowcaster."""
     if PD["GENERATE_DETERMINISTIC"]:
         # Need to override ensemble settings and to set noise settings to None
@@ -300,11 +324,15 @@ def generate_deterministic(observations, motion_field, nowcaster, nowcast_kwargs
                             PD["NUM_TIMESTEPS"],
                             **det_kwargs)
 
-        det_fct = pysteps.utils.transformation.dB_transform(det_fct, inverse=True)[0]
+        det_fct, meta = pysteps.utils.transformation.dB_transform(det_fct, metadata,
+                                                                  inverse=True)
+        # Convert to dBZ if wanted, RRATE units are default units
+        if PD["FIELD_VALUES"] == "DBZ":
+            det_fct, meta = pysteps.utils.conversion.to_reflectivity(det_fct, meta, PD["ZR_A"], PD["ZR_B"])
     else:
-        det_fct = None
+        det_fct, meta = None, dict()
 
-    return det_fct
+    return det_fct, meta
 
 
 def prepare_data_for_writing(forecast=None, deterministic=None):
@@ -312,16 +340,23 @@ def prepare_data_for_writing(forecast=None, deterministic=None):
     # Store data in integer format to save space (float64 -> uint16)
     store_dtype = 'uint16'
     store_nodata_value = np.iinfo(store_dtype).max if store_dtype.startswith('u') else -1
-    scaler = 10
+    scaler = PD["SCALER"]
+    scale_zero = PD["SCALE_ZERO"]
+    if scale_zero in [None, "auto"]:
+        scale_zero = None
 
     if PD["GENERATE_ENSEMBLE"] and PD["STORE_ENSEMBLE"] and forecast is not None:
-        fct = utils.prepare_fct_for_saving(forecast, scaler, store_dtype,
+        if scale_zero is None:
+            scale_zero = np.nanmin(forecast)
+        fct = utils.prepare_fct_for_saving(forecast, scaler, scale_zero, store_dtype,
                                            store_nodata_value)
     else:
         fct = None
 
     if PD["GENERATE_DETERMINISTIC"] and PD["STORE_DETERMINISTIC"] and deterministic is not None:
-        det_fct = utils.prepare_fct_for_saving(deterministic, scaler, store_dtype,
+        if scale_zero is None:
+            scale_zero = np.nanmin(deterministic)
+        det_fct = utils.prepare_fct_for_saving(deterministic, scaler, scale_zero, store_dtype,
                                                store_nodata_value)
     else:
         det_fct = None
@@ -334,13 +369,14 @@ def prepare_data_for_writing(forecast=None, deterministic=None):
     metadata = {
         "nodata": store_nodata_value,
         "gain": 1./scaler,
-        "offset": 0,
+        "offset": scale_zero,
     }
 
     return prepared, metadata
 
 
-def write_to_file(startdate, gen_output, time_at_start, time_at_end, nc_fname):
+def write_to_file(startdate, gen_output, time_at_start, time_at_end, nc_fname,
+                  metadata=dict()):
     """Write output to a HDF5 file."""
     fct = gen_output["fct"]
     det_fct = gen_output.get("det_fct", None)
@@ -378,14 +414,12 @@ def write_to_file(startdate, gen_output, time_at_start, time_at_end, nc_fname):
                 ens_grp = outf.create_group("member-{:0>2}".format(eidx))
                 utils.store_timeseries(ens_grp, fct[eidx, :, :, :], startdate,
                                        timestep=PD["NOWCAST_TIMESTEP"],
-                                       datefmt=PD["OUTPUT_TIME_FORMAT"],
                                        metadata=scale_meta)
 
         if PD["GENERATE_DETERMINISTIC"] and PD["STORE_DETERMINISTIC"]:
             det_grp = outf.create_group("deterministic")
             utils.store_timeseries(det_grp, det_fct[0, :, :, :], startdate,
                                    timestep=PD["NOWCAST_TIMESTEP"],
-                                   datefmt=PD["OUTPUT_TIME_FORMAT"],
                                    metadata=scale_meta)
 
         if PD["STORE_MOTION"]:
@@ -398,6 +432,8 @@ def write_to_file(startdate, gen_output, time_at_start, time_at_end, nc_fname):
                                                              PD["OUTPUT_TIME_FORMAT"])
         meta.attrs["nowcast_ended"] = dt.datetime.strftime(time_at_end,
                                                            PD["OUTPUT_TIME_FORMAT"])
+        meta.attrs["nowcast_units"] = metadata.get("unit", "Unknown")
+        meta.attrs["nowcast_seed"] = metadata.get("seed", "Unknown")
 
     return None
 
