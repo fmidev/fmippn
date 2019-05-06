@@ -5,6 +5,14 @@ import numpy as np
 import h5py
 
 
+def utcnow_floored(increment=5):
+    """Return UTC time with minutes replaced by latest multiple of `increment`."""
+    now = dt.datetime.utcnow()
+    floored_minutes = now.minute - (now.minute % increment)
+    now = now.replace(minute=floored_minutes)
+    return now
+
+
 def store_timeseries(grp, data, startdate, timestep, metadata=dict()):
     """Store timeseries for one member"""
     for index in range(data.shape[0]):

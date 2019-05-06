@@ -35,24 +35,23 @@ def run(timestamp=None, config=None, **kwargs):
     Optional keyword arguments:
         test -- If True, use development configuration (default=False)
     """
+    nc_fname = None
 
     if kwargs.get("test", False):
         # Use frontal precipitation event (verification) for development
         config = "dev"
         timestamp = "201506231400"
+        nc_fname = "00_nc_dev.h5"  # Development name for output file
 
     PD.update(get_config(config))
 
-    # TODO: log_folder should be parameter with a default value
     # TODO: log_fname should be parameter with a default value
-    # Configure logging if enabled
-    if PD["WRITE_LOG"]:
-        log_folder = os.path.expanduser("~/devel/fmippn/logs/")
-        log_fname = "ppn-{:%Y%m%d}.log".format(dt.datetime.utcnow())
-        ppn_logger.config_logging(os.path.join(log_folder, log_fname))
+    initialise_logging(log_folder=PD.get("LOG_FOLDER", "./"),
+                       log_fname="ppn-{:%Y%m%d}.log".format(dt.datetime.utcnow()))
 
     log("info", "Program starting.")
     log("debug", "Start setup")
+    log("debug", f"Input: timestamp={timestamp}, config={config}")
 
     # Default is generate nowcasts from previous radar composite
     # We need to replace utcnow() minutes with nearest (floor) multiple of 5
@@ -61,17 +60,12 @@ def run(timestamp=None, config=None, **kwargs):
     if timestamp is not None:
         startdate = dt.datetime.strptime(timestamp, "%Y%m%d%H%M")
     else:
-        startdate = utcnow_floored(increment=5)
-
-    # TODO: Better file name
-    # Use a development name for output file for clarity purposes
-    if kwargs.get("test", False):
-        nc_fname = "00_nc_dev.h5"
-    else:
-        nc_fname = "nc_{:%Y%m%d%H%M}.h5".format(startdate)
-
+        startdate = utils.utcnow_floored(increment=5)
     enddate = startdate + dt.timedelta(minutes=PD["MAX_LEADTIME"])
 
+    # TODO: Better file name
+    if nc_fname is None:
+        nc_fname = "nc_{:%Y%m%d%H%M}.h5".format(startdate)
 
     # GENERAL SETUP
 
@@ -81,10 +75,10 @@ def run(timestamp=None, config=None, **kwargs):
     # Used methods
     importer = importer_method(name=datasource["importer"])
     optflow = optflow_method()
-    nowcaster = nowcast_method()
+    nowcaster = nowcast_method("pysteps")
+    deterministic_nowcaster = nowcast_method("extrapolation")
 
     log("debug", "Setup finished")
-
 
     # NOWCASTING
 
@@ -93,15 +87,44 @@ def run(timestamp=None, config=None, **kwargs):
     time_at_start = dt.datetime.today()
 
     observations, obs_metadata = read_observations(startdate, datasource, importer)
+    if PD["VALUE_DOMAIN"] == "rrate":
+        observations, obs_metadata = dbz_to_dbr(observations, obs_metadata)
 
     motion_field = optflow(observations)
 
-    ensemble_forecast, ens_meta = generate(observations, motion_field, nowcaster,
-                                           nowcast_kwargs, metadata=obs_metadata)
+    # Regenerate ensemble motion
+    if PD["REGENERATE_PERTURBED_MOTION"]:
+        if PD["SEED"] is None:
+            raise ValueError("Cannot regenerate motion field with unknown seed value!")
+        log("info", "Regenerating ensemble motion fields...")
+        ensemble_motion = regenerate_ensemble_motion(motion_field, nowcast_kwargs)
+        log("info", "Finished regeneration.")
+    else:
+        ensemble_motion = None
 
+    if PD["GENERATE_ENSEMBLE"]:
+        ensemble_forecast, ens_meta = generate(observations, motion_field, nowcaster,
+                                               nowcast_kwargs, metadata=obs_metadata)
+    else:
+        ensemble_forecast = None
+        ens_meta = dict()
 
-    deterministic, det_meta = generate_deterministic(observations, motion_field, nowcaster,
-                                                     nowcast_kwargs, metadata=obs_metadata)
+    # TODO: Conversion from dBZ (value domain) to rrate (field value) if set up that way
+    if PD["GENERATE_UNPERTURBED"]:
+        unperturbed, unpert_meta = generate_unperturbed(observations, motion_field, nowcaster,
+                                                        nowcast_kwargs, metadata=obs_metadata)
+    else:
+        unperturbed = None
+        unpert_meta = dict()
+
+    if PD["GENERATE_DETERMINISTIC"]:
+        deterministic, det_meta = generate_deterministic(observations[-1],
+                                                         motion_field,
+                                                         deterministic_nowcaster,
+                                                         metadata=obs_metadata)
+    else:
+        deterministic = None
+        det_meta = dict()
 
     time_at_end = dt.datetime.today()
     log("debug", "Finished nowcasting at %s" % time_at_end)
@@ -109,60 +132,83 @@ def run(timestamp=None, config=None, **kwargs):
 
     gen_output = {
         "motion_field": motion_field,
-        "fct": ensemble_forecast,
-        "det_fct": deterministic,
+        "unperturbed": unperturbed,
+        "ensemble_motion": ensemble_motion,
+        "ensemble_forecast": ensemble_forecast,
+        "deterministic": deterministic,
     }
 
     # Metadata for storage
-    store_meta = dict()
-
     if "unit" in ens_meta:
         unit = ens_meta["unit"]
     elif "unit" in det_meta:
         unit = det_meta["unit"]
+    elif "unit" in unpert_meta:
+        unit = unpert_meta["unit"]
     else:
         unit = "Unknown"
-    store_meta["unit"] = unit
-    store_meta["seed"] = PD["SEED"]
+    store_meta = {
+        "unit": unit,
+        "seed": PD["SEED"],
+        "projection": {
+            "projstr": obs_metadata["projection"],
+            "x1": obs_metadata["x1"],
+            "x2": obs_metadata["x2"],
+            "y1": obs_metadata["y1"],
+            "y2": obs_metadata["y2"],
+            "xpixelsize": obs_metadata["xpixelsize"],
+            "ypixelsize": obs_metadata["ypixelsize"],
+            "origin": "upper",
+        },
+        "time_at_start": time_at_start,
+        "time_at_end": time_at_end,
+    }
 
     # WRITE OUTPUT TO A FILE
-    write_to_file(startdate, gen_output, time_at_start, time_at_end, nc_fname, store_meta)
+    write_to_file(startdate, gen_output, nc_fname, store_meta)
     log("info", "Finished writing output to a file.")
-
     log("info", "Run complete. Exiting.")
 
-# TODO: Automatically add more options here based on ppn_config.py? How?
 # Overriding defaults with configuration from file
-def get_config(init=None):
-    """Get configuration parameters and update non-default values."""
-    params = ppn_config.defaults
+def get_config(override_name=None):
+    """Get configuration parameters from ppn_config.py.
 
-    if init is not None:
-        cfg = ppn_config.get_params(init)
-    else:
-        cfg = dict()
+    If override_name is given, function updates non-default values."""
+    params = ppn_config.get_params("defaults")
 
-    params.update(cfg)
+    if override_name is not None:
+        override_params = ppn_config.get_params(override_name)
+        if not override_params:
+            warn_msg = ("Couldn't find overriding parameters in ppn_config. "
+                        "Key {} was unrecognised").format(override_name)
+            log("warning", warn_msg)
+            print("Warning: " + warn_msg)
+        params.update(override_params)
 
+    # This parameter might not exists in configuration
     if params.get("NUM_TIMESTEPS", None) is None:
         params.update(NUM_TIMESTEPS=int(params["MAX_LEADTIME"] / params["NOWCAST_TIMESTEP"]))
 
+    # Default to pysteps settings. Change default value in the future?
+    if params.get("OUTPUT_PATH", None) is None:
+        params.update(OUTPUT_PATH=pystepsrc["outputs"]["path_outputs"])
+
+    params.update(OUTPUT_PATH=os.path.expanduser(params["OUTPUT_PATH"]))
+
     return params
 
+def initialise_logging(log_folder='./', log_fname='ppn.log'):
+    """Wrapper for ppn_logger.config_logging() method. Does nothing if writing
+    to log is not enabled."""
+    if PD["WRITE_LOG"]:
+        full_path = os.path.expanduser(log_folder)
+        ppn_logger.config_logging(os.path.join(full_path, log_fname))
 
 def log(level, msg, *args, **kwargs):
     """Wrapper for ppn_logger. Function does nothing if writing to log is
     not enabled."""
     if PD["WRITE_LOG"]:
         ppn_logger.write_to_log(level, msg, *args, **kwargs)
-
-
-def utcnow_floored(increment=5):
-    """Return UTC time with minutes replaced by latest multiple of `increment`."""
-    now = dt.datetime.utcnow()
-    floored_minutes = now.minute - (now.minute % increment)
-    now = now.replace(minute=floored_minutes)
-    return now
 
 def importer_method(module="pysteps", **kwargs):
     """Wrapper for easily switching between modules which provide data importer
@@ -183,7 +229,6 @@ def importer_method(module="pysteps", **kwargs):
 
     raise ValueError("Unknown module {} for importer method".format(module))
 
-
 def optflow_method(module="pysteps", **kwargs):
     """Wrapper for easily switching between modules which provide optical flow
     methods.
@@ -203,7 +248,6 @@ def optflow_method(module="pysteps", **kwargs):
 
     raise ValueError("Unknown module {} for optical flow method".format(module))
 
-
 def nowcast_method(module="pysteps", **kwargs):
     """Wrapper for easily switching between modules which provide nowcasting
     methods.
@@ -219,10 +263,11 @@ def nowcast_method(module="pysteps", **kwargs):
     """
     if module == "pysteps":
         return pysteps.nowcasts.get_method("steps", **kwargs)
+    if module == "extrapolation":
+        return pysteps.nowcasts.get_method("extrapolation", **kwargs)
     # Add more options here
 
     raise ValueError("Unknown module {} for nowcast method".format(module))
-
 
 def generate_pysteps_setup():
     """Generate `datasource` and `nowcast_kwargs` objects that are suitable
@@ -240,18 +285,21 @@ def generate_pysteps_setup():
         "fft_method": PD["FFT_METHOD"],
         "n_ens_members": PD["ENSEMBLE_SIZE"],
         "vel_pert_method": PD["VEL_PERT_METHOD"],
+        "vel_pert_kwargs": PD["VEL_PERT_KWARGS"],
         "seed": PD["SEED"],
     }
 
     # R_MIN needs to be transformed to decibel, so that comparisons can be done
     # The pysteps method is kinda clunky here, since it expects a numpy array
     # as input.
-    r_min = np.asarray([PD["R_MIN"]])
-    nowcast_kwargs["R_thr"] = pysteps.utils.transformation.dB_transform(r_min)[0][0]
-
+    if PD["VALUE_DOMAIN"] == "rrate":
+        log("debug", f"Using R_MIN {PD['R_MIN']} value for thresholding")
+        r_min = np.asarray([PD["R_MIN"]])
+        nowcast_kwargs["R_thr"] = pysteps.utils.transformation.dB_transform(r_min)[0][0]
+    else:
+        nowcast_kwargs["R_thr"] = PD["DBZ_MIN"]
 
     return datasource, nowcast_kwargs
-
 
 def read_observations(startdate, datasource, importer):
     """Read observations from archives using pysteps methods."""
@@ -274,9 +322,11 @@ def read_observations(startdate, datasource, importer):
     obs, _, metadata = pysteps.io.readers.read_timeseries(filelist,
                                                           importer,
                                                           **datasource["importer_kwargs"])
+    obs[~np.isfinite(obs)] = metadata["zerovalue"]
+    return obs, metadata
 
-    # TODO: Refactor the conversion into own method
-    # TODO: Check if optical flow and FFT methods work also for dBZ values, not just dBR values
+def dbz_to_dbr(obs, metadata):
+    """Function to convert data from dBZ units to dBR units"""
     # Converting dBZ to rain rate
     obs, metadata = pysteps.utils.conversion.to_rainrate(obs, metadata, PD["ZR_A"], PD["ZR_B"])
 
@@ -288,83 +338,106 @@ def read_observations(startdate, datasource, importer):
 
     return obs, metadata
 
-
 def generate(observations, motion_field, nowcaster, nowcast_kwargs, metadata=None):
     """Generate ensemble nowcast using pysteps nowcaster."""
-    if PD["GENERATE_ENSEMBLE"]:
-        fct = nowcaster(observations,
-                        motion_field,
-                        PD["NUM_TIMESTEPS"],
-                        **nowcast_kwargs)
+    forecast = nowcaster(observations, motion_field, PD["NUM_TIMESTEPS"],
+                         **nowcast_kwargs)
 
-        fct, meta = pysteps.utils.transformation.dB_transform(fct, metadata, inverse=True)
-        # Convert to dBZ if wanted, RRATE units are default units
-        if PD["FIELD_VALUES"] == "DBZ":
-            fct, meta = pysteps.utils.conversion.to_reflectivity(fct, meta, PD["ZR_A"], PD["ZR_B"])
+    if (metadata["unit"] == "mm/h") and (metadata["transform"] == "dB"):
+        forecast, meta = pysteps.utils.transformation.dB_transform(forecast, metadata,
+                                                                   inverse=True)
     else:
-        fct, meta = None, dict()
+        meta = metadata
 
-    return fct, meta
+    if PD["FIELD_VALUES"] == "dbz" and metadata["unit"] == "mm/h":
+        forecast, meta = pysteps.utils.conversion.to_reflectivity(forecast,
+                                                                  meta,
+                                                                  PD["ZR_A"],
+                                                                  PD["ZR_B"])
+    if meta is None:
+        meta = dict()
+    return forecast, meta
 
+def generate_unperturbed(observations, motion_field, nowcaster, nowcast_kwargs,
+                         metadata=None):
+    """Generate a steps nowcast without perturbations using pysteps nowcaster."""
+    # Need to override ensemble settings and to set noise settings to None
+    # for unperturbed nowcast generation
+    unpert_kwargs = nowcast_kwargs.copy()
+    unpert_kwargs.update({
+        "n_ens_members": 1,
+        "noise_method": None,
+        "vel_pert_method": None,
+    })
+    forecast, meta = generate(observations, motion_field, nowcaster, unpert_kwargs,
+                              metadata)
 
-def generate_deterministic(observations, motion_field, nowcaster, nowcast_kwargs,
+    return forecast, meta
+
+def generate_deterministic(observations, motion_field, nowcaster, nowcast_kwargs=None,
                            metadata=None):
-    """Generate deterministic nowcast using pysteps nowcaster."""
-    if PD["GENERATE_DETERMINISTIC"]:
-        # Need to override ensemble settings and to set noise settings to None
-        # for deterministic nowcast generation
-        det_kwargs = nowcast_kwargs.copy()
-        det_kwargs.update({
-            "n_ens_members": 1,
-            "noise_method": None,
-            "vel_pert_method": None,
-        })
-        det_fct = nowcaster(observations,
-                            motion_field,
-                            PD["NUM_TIMESTEPS"],
-                            **det_kwargs)
+    """Generate a deterministic nowcast using semilagrangian extrapolation"""
+    # Extrapolation scheme doesn't use the same nowcast_kwargs as steps
+    if nowcast_kwargs is None:
+        nowcast_kwargs = dict()
+    forecast, meta = generate(observations, motion_field, nowcaster, nowcast_kwargs,
+                              metadata)
+    return forecast, meta
 
-        det_fct, meta = pysteps.utils.transformation.dB_transform(det_fct, metadata,
-                                                                  inverse=True)
-        # Convert to dBZ if wanted, RRATE units are default units
-        if PD["FIELD_VALUES"] == "DBZ":
-            det_fct, meta = pysteps.utils.conversion.to_reflectivity(det_fct, meta, PD["ZR_A"], PD["ZR_B"])
-    else:
-        det_fct, meta = None, dict()
+def regenerate_ensemble_motion(motion_field, nowcast_kwargs):
+    """Generate motion perturbations the same way as pysteps.nowcasts.steps function.
 
-    return det_fct, meta
+    This is a workaround for obtaining perturbed motion fields from steps
+    calculations, as pysteps doesn't currently give them as output. (2019-09-02)
+    """
+    pixelsperkm = 1./nowcast_kwargs["kmperpixel"]
+    timestep = nowcast_kwargs["timestep"]
+    pert_params = nowcast_kwargs["vel_pert_kwargs"]
 
+    # (edited from pysteps.nowcasts.steps.forecast function)
+    # initialize the random generators
+    seed = nowcast_kwargs["seed"]
+    if nowcast_kwargs["vel_pert_method"] is not None:
+        randgen_prec = []
+        randgen_motion = []
+        np.random.seed(seed)
+        for _ in range(nowcast_kwargs["n_ens_members"]):
+            new_state = np.random.RandomState(seed)
+            randgen_prec.append(new_state)
+            seed = new_state.randint(0, high=1e9)
+            new_state = np.random.RandomState(seed)
+            randgen_motion.append(new_state)
+            seed = new_state.randint(0, high=1e9)
+    # (copypaste ends here)
 
-def prepare_data_for_writing(forecast=None, deterministic=None):
+    ensemble_motions = []
+    for i, random_state in enumerate(randgen_motion):
+        init_perturbations = pysteps.noise.motion.initialize_bps(motion_field,
+                                                                 pixelsperkm,
+                                                                 timestep,
+                                                                 p_par=pert_params["p_par"],
+                                                                 p_perp=pert_params["p_perp"],
+                                                                 randstate=random_state)
+        perturbations = pysteps.noise.motion.generate_bps(init_perturbations, timestep*(i+1))
+        perturbed = motion_field + perturbations
+        ensemble_motions.append(perturbed)
+
+    return ensemble_motions
+
+def prepare_data_for_writing(forecast):
     """Convert and scale ensemble and deterministic forecast data to uint16 type"""
+    if forecast is None:
+        return None, dict()
+
     # Store data in integer format to save space (float64 -> uint16)
     store_dtype = 'uint16'
     store_nodata_value = np.iinfo(store_dtype).max if store_dtype.startswith('u') else -1
     scaler = PD["SCALER"]
     scale_zero = PD["SCALE_ZERO"]
     if scale_zero in [None, "auto"]:
-        scale_zero = None
-
-    if PD["GENERATE_ENSEMBLE"] and PD["STORE_ENSEMBLE"] and forecast is not None:
-        if scale_zero is None:
-            scale_zero = np.nanmin(forecast)
-        fct = utils.prepare_fct_for_saving(forecast, scaler, scale_zero, store_dtype,
-                                           store_nodata_value)
-    else:
-        fct = None
-
-    if PD["GENERATE_DETERMINISTIC"] and PD["STORE_DETERMINISTIC"] and deterministic is not None:
-        if scale_zero is None:
-            scale_zero = np.nanmin(deterministic)
-        det_fct = utils.prepare_fct_for_saving(deterministic, scaler, scale_zero, store_dtype,
-                                               store_nodata_value)
-    else:
-        det_fct = None
-
-    prepared = {
-        'forecast': fct,
-        'deterministic': det_fct,
-    }
+        scale_zero = np.nanmin(forecast)
+    prepared_forecast = utils.prepare_fct_for_saving(forecast, scaler, scale_zero,
+                                                     store_dtype, store_nodata_value)
 
     metadata = {
         "nodata": store_nodata_value,
@@ -372,75 +445,80 @@ def prepare_data_for_writing(forecast=None, deterministic=None):
         "offset": scale_zero,
     }
 
-    return prepared, metadata
+    return prepared_forecast, metadata
 
-
-def write_to_file(startdate, gen_output, time_at_start, time_at_end, nc_fname,
-                  metadata=dict()):
+def write_to_file(startdate, gen_output, nc_fname, metadata=None):
     """Write output to a HDF5 file."""
-    fct = gen_output["fct"]
-    det_fct = gen_output.get("det_fct", None)
+    ensemble_forecast = gen_output.get("ensemble_forecast", None)
+    unperturbed = gen_output.get("unperturbed", None)
+    deterministic = gen_output.get("deterministic", None)
     motion_field = gen_output.get("motion_field", None)
+    ensemble_motion = gen_output.get("ensemble_motion", None)
 
-    # Corner case handling when
-    #   STORE_ENSEMBLE == False and
-    #   STORE_DETERMINISTIC == False and
-    #   STORE_MOTION == False
-    # TODO: Should these raise ValueError instead of returning?
-    if not PD["STORE_ENSEMBLE"] and not PD["STORE_DETERMINISTIC"] and not PD["STORE_MOTION"]:
-        print("Nothing to store.")
+    if metadata is None:
+        metadata = dict()
+
+    if all((dataset is None for dataset in gen_output.values())):
+        print("Nothing to store")
         log("warning", "Nothing to store into .h5 file. Skipping.")
         return None
-    if PD["STORE_DETERMINISTIC"] and det_fct is None:
-        print("Cannot store deterministic nowcast when it is None.")
-        log("error", "Cannot store deterministic nowcast when it is None.")
-        return None
 
-    # TODO: Move these to a more logical place
-    if PD["OUTPUT_PATH"] is None:
-        output_path = pystepsrc["outputs"]["path_outputs"]
-    else:
-        output_path = PD["OUTPUT_PATH"]
-    output_path = os.path.expanduser(output_path)
-    nc_fpath = os.path.join(output_path, nc_fname)
+    ensemble_forecast, ens_scale_meta = prepare_data_for_writing(ensemble_forecast)
+    deterministic, det_scale_meta = prepare_data_for_writing(deterministic)
+    unperturbed, unpert_scale_meta = prepare_data_for_writing(unperturbed)
 
-    prepared, scale_meta = prepare_data_for_writing(fct, det_fct)
-    fct = prepared["forecast"]
-    det_fct = prepared["deterministic"]
-
-    with h5py.File(nc_fpath, 'w') as outf:
-        if PD["STORE_ENSEMBLE"]:
+    with h5py.File(os.path.join(PD["OUTPUT_PATH"], nc_fname), 'w') as outf:
+        if ensemble_forecast is not None and PD["STORE_ENSEMBLE"]:
             for eidx in range(PD["ENSEMBLE_SIZE"]):
                 ens_grp = outf.create_group("member-{:0>2}".format(eidx))
-                utils.store_timeseries(ens_grp, fct[eidx, :, :, :], startdate,
+                utils.store_timeseries(ens_grp,
+                                       ensemble_forecast[eidx, :, :, :],
+                                       startdate,
                                        timestep=PD["NOWCAST_TIMESTEP"],
-                                       metadata=scale_meta)
+                                       metadata=ens_scale_meta)
 
-        if PD["GENERATE_DETERMINISTIC"] and PD["STORE_DETERMINISTIC"]:
-            det_grp = outf.create_group("deterministic")
-            utils.store_timeseries(det_grp, det_fct[0, :, :, :], startdate,
+        if ensemble_motion is not None and PD["STORE_PERTURBED_MOTION"]:
+            for eidx in range(PD["ENSEMBLE_SIZE"]):
+                try:
+                    ens_grp = outf["member-{:0>2}".format(eidx)]
+                except KeyError:
+                    ens_grp = outf.create_group("member-{:0>2}".format(eidx))
+                ens_grp.create_dataset("motion", data=ensemble_motion[eidx])
+
+        if unperturbed is not None and PD["STORE_UNPERTURBED"]:
+            unpert_grp = outf.create_group("unperturbed")
+            utils.store_timeseries(unpert_grp, unperturbed[0, :, :, :], startdate,
                                    timestep=PD["NOWCAST_TIMESTEP"],
-                                   metadata=scale_meta)
+                                   metadata=det_scale_meta)
+
+        if deterministic is not None and PD["STORE_DETERMINISTIC"]:
+            det_grp = outf.create_group("deterministic")
+            utils.store_timeseries(det_grp, deterministic, startdate,
+                                   timestep=PD["NOWCAST_TIMESTEP"],
+                                   metadata=unpert_scale_meta)
 
         if PD["STORE_MOTION"]:
-            #~ mot_grp = outf.create_group("motion")
             outf.create_dataset("motion", data=motion_field)
 
         # TODO: Improve metadata storing functionality
         meta = outf.create_group("meta")
-        meta.attrs["nowcast_started"] = dt.datetime.strftime(time_at_start,
+        meta.attrs["nowcast_started"] = dt.datetime.strftime(metadata["time_at_start"],
                                                              PD["OUTPUT_TIME_FORMAT"])
-        meta.attrs["nowcast_ended"] = dt.datetime.strftime(time_at_end,
+        meta.attrs["nowcast_ended"] = dt.datetime.strftime(metadata["time_at_end"],
                                                            PD["OUTPUT_TIME_FORMAT"])
         meta.attrs["nowcast_units"] = metadata.get("unit", "Unknown")
         meta.attrs["nowcast_seed"] = metadata.get("seed", "Unknown")
+        meta.attrs["nowcast_init_time"] = dt.datetime.strftime(startdate, "%Y%m%d%H%M")
+
+        pd_meta = meta.create_group("configuration")
+        for key, value in PD.items():
+            pd_meta.attrs[key] = str(value)
+
+        proj_meta = meta.create_group("projection")
+        for key, value in metadata["projection"].items():
+            proj_meta.attrs[key] = value
 
     return None
-
-    # Operative runs should store the following:
-    # - Deterministic member
-    # - Probability products for different periods and thresholds
-    # - Ensemble mean
 
 if __name__ == '__main__':
     run(test=True)
