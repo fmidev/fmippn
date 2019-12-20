@@ -2,7 +2,6 @@
 import datetime as dt
 
 import numpy as np
-import h5py
 
 
 def utcnow_floored(increment=5):
@@ -13,8 +12,21 @@ def utcnow_floored(increment=5):
     return now
 
 
-def store_timeseries(grp, data, startdate, timestep, metadata=dict()):
-    """Store timeseries for one member"""
+def store_timeseries(grp, data, startdate, timestep, metadata=None):
+    """Store timeseries for one nowcast ensemble member.
+
+    Input:
+        grp -- group object in HDF5 file
+        data -- timeseries data in 3-dimensional numpy array (first dimension=time)
+        startdate -- nowcast analysis time (datetime object)
+        timestep -- time difference between nowcast fields (int)
+
+    Optional input:
+        metadata -- a dictionary containing additional metadata. Will be added
+                    to dataset as attributes
+    """
+    if metadata is None:
+        metadata = dict()
     for index in range(data.shape[0]):
         ts_point = data[index, :, :]
         tmp = grp.create_dataset("leadtime-{:0>2}".format(index), data=ts_point)
@@ -25,8 +37,24 @@ def store_timeseries(grp, data, startdate, timestep, metadata=dict()):
 
 
 def prepare_fct_for_saving(fct, scaler, scale_zero, store_dtype, store_nodata_value):
-    """Scale and convert `fct` to correct datatype. NaN values are converted to
-    `store_nodata_value`."""
+    """Scale and convert nowcast data to correct datatype.
+
+    The data will be scaled according to equation
+        fct_scaled = scaler * (fct - scale_zero)
+
+    NaN values are converted to `store_nodata_value`.
+
+    Input:
+        fct -- nowcast data (numpy.array)
+        scaler -- scaling term for scale equation
+        scale_zero -- value for data that will be 0 in scaled values
+        store_dtype -- data type for scaled values (numpy.dtype)
+        store_nodata_value -- Value that will be used to mark invalid elements
+                              in scaled values
+
+    Output:
+        fct_scaled -- scaled and converted data
+    """
     nodata_mask = ~np.isfinite(fct)
     fct_scaled = scaler * (fct - scale_zero)
     if store_nodata_value != -1 and np.any(fct_scaled >= store_nodata_value):

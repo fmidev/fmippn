@@ -14,12 +14,17 @@ Adding new parametrizations:
 """
 import logging
 
-# TODO: Each parametrization in its own file?
-
-# TODO: Explain these constants/settings in readme.md
 
 def get_params(name):
     """Utility function for easier access to wanted parametrizations.
+
+    Two parametrisations should be provided: `defaults` and `test`.
+    `defaults` contains all possible parameters and default values for them.
+    The default values are used unless explicitly overriden.
+
+    `test` contains parametrisations for short nowcast that generates all
+    different nowcasts. Suitable for quickly testing different parameters and
+    for development purposes.
 
     Input:
         name -- name of the parametrization dictionary
@@ -30,10 +35,10 @@ def get_params(name):
     # Lookup dictionary
     names = {
         'defaults': defaults,
-        'dev': dev,
-        'verification': verification,
-        'road_weather': road_weather,
-        '2019-08-23-event': demo_heavy_rainfall_pks,
+        'test': test,
+        'esteri': esteri,
+        'esteri_archive': esteri_archive,
+        'docker_ravake': docker_ravake,
     }
 
     return names.get(name, dict())
@@ -45,9 +50,9 @@ defaults = {
     "DOMAIN": "fmi", # See pystepsrc for valid data sources
     "OPTFLOW_METHOD": "lucaskanade",
     "FFT_METHOD": "pyfftw",
+    "GENERATE_DETERMINISTIC": True,
     "GENERATE_ENSEMBLE": True,
     "GENERATE_UNPERTURBED": False,
-    "GENERATE_DETERMINISTIC": False,
     "REGENERATE_PERTURBED_MOTION": False,  # Re-calculate the perturbed motion fields used for pysteps nowcasting
     "VALUE_DOMAIN": "dbz",  # dbz or rrate
     # Z-R conversion parameters
@@ -56,9 +61,9 @@ defaults = {
     # Nowcasting parameters
     "NUM_PREV_OBSERVATIONS": 3,
     "NOWCAST_TIMESTEP": 5,
-    "MAX_LEADTIME": 30,
+    "MAX_LEADTIME": 120,
     "NUM_TIMESTEPS": None,
-    "ENSEMBLE_SIZE": 5,
+    "ENSEMBLE_SIZE": 25,
     "NUM_CASCADES": 6,
     "NUM_WORKERS": 6,
     "R_MIN": 0.1,
@@ -80,10 +85,10 @@ defaults = {
     "OUTPUT_PATH": None,  # None uses pystepsrc output path
     "OUTPUT_TIME_FORMAT": "%Y-%m-%d %H:%M:%S",
     "STORE_ENSEMBLE": True, # Write each ensemble member to output
-    "STORE_UNPERTURBED": False,
-    "STORE_DETERMINISTIC": False,  # Write det_fct to output
-    "STORE_MOTION": False, # Write deterministic motion to output
-    "STORE_PERTURBED_MOTION": False,  # Write motion for each ensemble member to output
+    "STORE_UNPERTURBED": True,
+    "STORE_DETERMINISTIC": True,  # Write det_fct to output
+    "STORE_MOTION": True, # Write deterministic motion to output
+    "STORE_PERTURBED_MOTION": True,  # Write motion for each ensemble member to output
     "SCALER": 100,
     "SCALE_ZERO": "auto",  # Value for "0" in scaled units. Set to "auto" or None for minimum value found before scaling
     # Logging parameters
@@ -93,81 +98,107 @@ defaults = {
 }
 
 # Add new parametrizations here
-dev = {
+test = {
     "DOMAIN": "fmi_archive",
-    "LOG_LEVEL": logging.DEBUG,
     "NOWCAST_TIMESTEP": 5,
     "MAX_LEADTIME": 30,
     "ENSEMBLE_SIZE": 5,
-    "WRITE_LOG": False,
-    "STORE_ENSEMBLE": True,
-    "GENERATE_DETERMINISTIC": True,
-    "STORE_DETERMINISTIC": True,
-    "STORE_MOTION": True,
     "SEED": 0,
+
     "FIELD_VALUES": "rrate",
-    "SCALER": 10,
     "VALUE_DOMAIN": "rrate",
-    "REGENERATE_PERTURBED_MOTION": True,
-    "STORE_PERTURBED_MOTION": True,
+
+    "GENERATE_DETERMINISTIC": True,
+    "GENERATE_ENSEMBLE": True,
     "GENERATE_UNPERTURBED": True,
-    "STORE_UNPERTURBED": True,
-}
-
-verification = {
-    "DOMAIN": "verification",
-    "MAX_LEADTIME": 180,
-    "ENSEMBLE_SIZE": 50,
-    "NUM_WORKERS": 30,
-    "WRITE_LOG": True,
-    "LOG_LEVEL": logging.INFO,
-    "STORE_ENSEMBLE": True,
-    "STORE_MOTION": True,
-    "GENERATE_DETERMINISTIC": True,
-    "STORE_DETERMINISTIC": True,
-    "OUTPUT_PATH": "~/tmp-data",
-    "SEED": 2019050104,
     "REGENERATE_PERTURBED_MOTION": True,
-    "STORE_PERTURBED_MOTION": True,
-    "VALUE_DOMAIN": "rrate",
-    "FIELD_VALUES": "rrate",
-}
 
-road_weather = {
-    "DOMAIN": "fmi_archive",
-    "WRITE_LOG": False,
-    "NOWCAST_TIMESTEP": 5,
-    "MAX_LEADTIME": 180,
-    "ENSEMBLE_SIZE": 1,
-    "STORE_ENSEMBLE": False,
-    "STORE_MOTION": False,
     "STORE_DETERMINISTIC": True,
-    "GENERATE_DETERMINISTIC": True,
-    "GENERATE_ENSEMBLE": False,
-    "OUTPUT_PATH": "~/devel/fmippn/out/road",
-    "SEED": 1234567890,
-    "FIELD_VALUES": "DBZ",
-    "SCALER": 10,
+    "STORE_ENSEMBLE": True,
+    "STORE_UNPERTURBED": True,
+    "STORE_PERTURBED_MOTION": True,
+    "STORE_MOTION": True,
+
+    "LOG_LEVEL": logging.DEBUG,
+    "WRITE_LOG": False,
 }
 
-demo_heavy_rainfall_pks = { # 2019-08-23 was heavy rainfall event in Helsinki region
-    "DOMAIN": "fmi",
+esteri = {
+    "DOMAIN": "fmi_realtime_ravake",
     "NOWCAST_TIMESTEP": 5,
-    "MAX_LEADTIME": 120,
-    "ENSEMBLE_SIZE": 51,
-    "NUM_WORKERS": 25,
+    "MAX_LEADTIME": 90,
+    "ENSEMBLE_SIZE": 15,
+    "NUM_WORKERS": 30,
+    "GENERATE_UNPERTURBED": True,
+    "REGENERATE_PERTURBED_MOTION": True,  # Re-calculate the perturbed motion fields used for pysteps nowcasting
+    "GENERATE_DETERMINISTIC": True,
+    "OUTPUT_PATH": "/dev/shm/ppn",
+    "STORE_MOTION": True,
     "STORE_ENSEMBLE": True,
     "STORE_DETERMINISTIC": True,
-    "GENERATE_DETERMINISTIC": True,
-    "STORE_MOTION": True,
     "SEED": 20190823,
     "FIELD_VALUES": "dbz",
     "VALUE_DOMAIN": "dbz",
     "SCALER": 10,
-    "OUTPUT_PATH": "~/tmp-data/2019-08-23-event",
     "WRITE_LOG": True,
     "LOG_LEVEL": logging.DEBUG,
-    "LOG_FOLDER": "~/tmp-data/2019-08-23-event",
-    "DBZ_MIN": 8,
-    "DBZ_THRESHOLD": 8,
+    "LOG_FOLDER": "/var/tmp/log",
+    "DBZ_MIN": -10,
+    "DBZ_THRESHOLD": -10,
+    "VEL_PERT_KWARGS": {
+        # lucaskanade/fmi values given in pysteps.nowcasts.steps.forecast() method documentation
+        "p_par": [0, 0, 0],
+        "p_perp": [0, 0, 0],
+    },
+}
+
+esteri_archive = {
+    "DOMAIN": "fmi_archived_ravake",
+    "NOWCAST_TIMESTEP": 5,
+    "MAX_LEADTIME": 60,
+    "ENSEMBLE_SIZE": 15,
+    "NUM_WORKERS": 25,
+    "GENERATE_DETERMINISTIC": True,
+    "OUTPUT_PATH": "/dev/shm/ppn",
+    "STORE_MOTION": True,
+    "STORE_ENSEMBLE": True,
+    "STORE_DETERMINISTIC": True,
+    "SEED": 20190823,
+    "FIELD_VALUES": "dbz",
+    "VALUE_DOMAIN": "dbz",
+    "SCALER": 10,
+    "WRITE_LOG": True,
+    "LOG_LEVEL": logging.DEBUG,
+    "LOG_FOLDER": "/var/tmp/log",
+    "DBZ_MIN": -6,
+    "DBZ_THRESHOLD": -6,
+}
+
+docker_ravake = {
+    "DOMAIN": "fmi_realtime_ravake_docker",
+    "NOWCAST_TIMESTEP": 5,
+    "MAX_LEADTIME": 90,
+    "ENSEMBLE_SIZE": 15,
+    "NUM_WORKERS": 30,
+    "GENERATE_UNPERTURBED": True,
+    "REGENERATE_PERTURBED_MOTION": True,  # Re-calculate the perturbed motion fields used for pysteps nowcasting
+    "GENERATE_DETERMINISTIC": True,
+    "OUTPUT_PATH": "~/fmippn-run/fmippn-run-and-distribution/output",
+    "STORE_MOTION": True,
+    "STORE_ENSEMBLE": True,
+    "STORE_DETERMINISTIC": True,
+    "SEED": 20190823,
+    "FIELD_VALUES": "dbz",
+    "VALUE_DOMAIN": "dbz",
+    "SCALER": 10,
+    "WRITE_LOG": True,
+    "LOG_LEVEL": logging.DEBUG,
+    "LOG_FOLDER": "~/fmippn-run/fmippn-run-and-distribution/logs",
+    "DBZ_MIN": -10,
+    "DBZ_THRESHOLD": -10,
+    "VEL_PERT_KWARGS": {
+        # lucaskanade/fmi values given in pysteps.nowcasts.steps.forecast() method documentation
+        "p_par": [0, 0, 0],
+        "p_perp": [0, 0, 0],
+    },
 }

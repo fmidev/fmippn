@@ -39,13 +39,12 @@ def run(timestamp=None, config=None, **kwargs):
 
     if kwargs.get("test", False):
         # Use frontal precipitation event (verification) for development
-        config = "dev"
+        config = "test"
         timestamp = "201506231400"
-        nc_fname = "00_nc_dev.h5"  # Development name for output file
+        nc_fname = "00_test_output.h5"  # Development name for output file
 
     PD.update(get_config(config))
 
-    # TODO: log_fname should be parameter with a default value
     initialise_logging(log_folder=PD.get("LOG_FOLDER", "./"),
                        log_fname="ppn-{:%Y%m%d}.log".format(dt.datetime.utcnow()))
 
@@ -63,7 +62,6 @@ def run(timestamp=None, config=None, **kwargs):
         startdate = utils.utcnow_floored(increment=5)
     enddate = startdate + dt.timedelta(minutes=PD["MAX_LEADTIME"])
 
-    # TODO: Better file name
     if nc_fname is None:
         nc_fname = "nc_{:%Y%m%d%H%M}.h5".format(startdate)
 
@@ -313,8 +311,6 @@ def read_observations(startdate, datasource, importer):
                                            num_prev_files=PD["NUM_PREV_OBSERVATIONS"])
     except OSError:
         # Re-raise so traceback is shown in stdout and program stops
-        # TODO: Implement more detailed error logging for this
-        # TODO: Implement more graceful exit strategy or ability to retry
         log("error", "OSError was raised, see output for traceback")
         raise
 
@@ -448,7 +444,14 @@ def prepare_data_for_writing(forecast):
     return prepared_forecast, metadata
 
 def write_to_file(startdate, gen_output, nc_fname, metadata=None):
-    """Write output to a HDF5 file."""
+    """Write output to a HDF5 file.
+
+    Input:
+        startdate -- nowcast analysis time (datetime object)
+        gen_output -- dictionary containing generated nowcasts
+        nc_fname -- filename for output HDF5 file
+        metadata -- dictionary containing nowcast metadata (optional)
+    """
     ensemble_forecast = gen_output.get("ensemble_forecast", None)
     unperturbed = gen_output.get("unperturbed", None)
     deterministic = gen_output.get("deterministic", None)
@@ -500,7 +503,6 @@ def write_to_file(startdate, gen_output, nc_fname, metadata=None):
         if PD["STORE_MOTION"]:
             outf.create_dataset("motion", data=motion_field)
 
-        # TODO: Improve metadata storing functionality
         meta = outf.create_group("meta")
         meta.attrs["nowcast_started"] = dt.datetime.strftime(metadata["time_at_start"],
                                                              PD["OUTPUT_TIME_FORMAT"])

@@ -3,6 +3,13 @@
 import logging
 
 def config_logging(fname, level=logging.INFO, datefmt="%Y-%m-%d %H:%M:%S"):
+    """Setup logger object using logging.basicConfig.
+
+    Input:
+        fname -- name of the log file (str)
+
+    `level` and `datefmt` arguments correspond to logging.basicConfig arguments.
+    """
     logging.basicConfig(
         filename=fname,
         level=level,
