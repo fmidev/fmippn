@@ -10,4 +10,4 @@ dependencies:
   - pillow
   - dask
   - pyfftw
-  - pysteps=1.0.0
+  - pysteps=1.1.1

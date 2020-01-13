@@ -5,6 +5,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 This project DOES NOT adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Instead, version numbering will be a running number. Each major number increases when a dependency module is upgraded, added, or removed (e.g. pysteps). Each minor number increases when a research version is updated, either by RAS or PAK.
 
+## [v3.0] - 2020-01-29
+### Added
+- Folder for configuration files
+- Utility functions for generating a configuration json file
+- Parameters `NORAIN_VALUE` and `RAIN_THRESHOLD` for thresholding
+- MIT License
+
+### Changed
+- Configurations are now read from json files
+- Updated default configuration based on Pysteps article (Pulkkinen et al. 2019)
+- Updated pysteps version to 1.1.1
+- `LOG_FOLDER`, `LOG_LEVEL` and `OUTPUT_PATH` configuration parameters are no longer included in output metadata
+
+### Removed
+- Configuration parameters `DBZ_MIN`, `DBZ_THRESHOLD`, `R_MIN`, `R_THRESHOLD` (Replaced with new parameters).
+
+### Fixed
+- Program tried to write a log file before logging was initialised, when program couldn't find a given configuration. Now program raises an error instead.
+- Input data is now thresholded properly
+- Now it is possible to output values in mm/h, even if calculations are done in dBZ
+
 ## [v2.1] - 2019-12-20
 ### Added
 - New parametrisations and configurations for operational use
@@ -67,6 +88,7 @@ This project DOES NOT adhere to [Semantic Versioning](https://semver.org/spec/v2
 ## [v1.0] - 2019-01-22
 - First prototype version given to operational testing
 
+[v3.0]: https://github.com/fmidev/fmippn/compare/v2.1...v3.0
 [v2.1]: https://github.com/fmidev/fmippn/compare/v2.0...v2.1
 [v2.0]: https://github.com/fmidev/fmippn/compare/v1.1...v2.0
 [v1.1]: https://github.com/fmidev/fmippn/compare/v1.0...v1.1

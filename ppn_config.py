@@ -8,12 +8,17 @@ update defaults with non-default dictionary.
 Utility method `get_params(name)` returns a dictionary.
 
 Adding new parametrizations:
-  1. Create a new dictionary object
-  2. Add new parameter values in the new dictionary
-  3. Update the lookup dictionary inside get_params() method
+  1. Create a new json file in config folder
+  2. Add new parameter values in a json dictionary object
+
+TIP: To easily create a json file, dump the defaults from this file and modify
+the resulting json file. Just remember to rename the json file! Easy way of
+generating the file is to run following command on command line:
+
+/path/to/fmippn/source$ python -c "import ppn_config; ppn_config.dump_defaults()"
 """
 import logging
-
+import json
 
 def get_params(name):
     """Utility function for easier access to wanted parametrizations.
@@ -32,16 +37,33 @@ def get_params(name):
     Return dictionary of parameters for overriding defaults. Non-existing
     names will return an empty dictionary.
     """
-    # Lookup dictionary
-    names = {
-        'defaults': defaults,
-        'test': test,
-        'esteri': esteri,
-        'esteri_archive': esteri_archive,
-        'docker_ravake': docker_ravake,
-    }
+    if name == "defaults":
+        params = defaults
+    else:
+        try:
+            with open(f"config/{name}.json", "r") as f:
+                params = json.load(f)
+        except FileNotFoundError:
+            params = dict()
 
-    return names.get(name, dict())
+    return params
+
+def dump_params_to_json(params, config_name):
+    """Utility function for dumping the used parametrisations to a new config file.
+
+    Input:
+        params -- a Python dictionary containing the parametrisations
+        config_name -- name for the new configuration file
+
+    The parametrisations will be written to ./config/{config_name}.json
+    """
+    with open(f"config/{config_name}.json", "w") as f:
+        json.dump(params, f, indent=2)
+
+def dump_defaults():
+    """Utility function for generating a configuration file with default values.
+    Useful for creating new configurations using Python shell."""
+    dump_params_to_json(defaults, "defaults")
 
 # Default parameters for PPN, other dictionaries should override these parameters
 # using dict.update() method.
@@ -63,13 +85,11 @@ defaults = {
     "NOWCAST_TIMESTEP": 5,
     "MAX_LEADTIME": 120,
     "NUM_TIMESTEPS": None,
-    "ENSEMBLE_SIZE": 25,
-    "NUM_CASCADES": 6,
+    "ENSEMBLE_SIZE": 24,
+    "NUM_CASCADES": 8,
     "NUM_WORKERS": 6,
-    "R_MIN": 0.1,
-    "R_THRESHOLD": 0.1,
-    "DBZ_MIN": -10,
-    "DBZ_THRESHOLD": -10,
+    "RAIN_THRESHOLD": 6.5,  # Roughly 0.1 mm/h using Z = 223 * R ** 1.53
+    "NORAIN_VALUE": 1.5,  # Threshold minus 5 (dB) units. Roughly 0.04 mm/h using above
     "KMPERPIXEL": 1.0,
     "SEED": None,  # Default value in pysteps is None
     # Motion perturbation parameters
@@ -95,110 +115,4 @@ defaults = {
     "WRITE_LOG": False,
     "LOG_LEVEL": logging.INFO,  # see logging module documentation for valid levels
     "LOG_FOLDER": "../logs",
-}
-
-# Add new parametrizations here
-test = {
-    "DOMAIN": "fmi_archive",
-    "NOWCAST_TIMESTEP": 5,
-    "MAX_LEADTIME": 30,
-    "ENSEMBLE_SIZE": 5,
-    "SEED": 0,
-
-    "FIELD_VALUES": "rrate",
-    "VALUE_DOMAIN": "rrate",
-
-    "GENERATE_DETERMINISTIC": True,
-    "GENERATE_ENSEMBLE": True,
-    "GENERATE_UNPERTURBED": True,
-    "REGENERATE_PERTURBED_MOTION": True,
-
-    "STORE_DETERMINISTIC": True,
-    "STORE_ENSEMBLE": True,
-    "STORE_UNPERTURBED": True,
-    "STORE_PERTURBED_MOTION": True,
-    "STORE_MOTION": True,
-
-    "LOG_LEVEL": logging.DEBUG,
-    "WRITE_LOG": False,
-}
-
-esteri = {
-    "DOMAIN": "fmi_realtime_ravake",
-    "NOWCAST_TIMESTEP": 5,
-    "MAX_LEADTIME": 90,
-    "ENSEMBLE_SIZE": 15,
-    "NUM_WORKERS": 30,
-    "GENERATE_UNPERTURBED": True,
-    "REGENERATE_PERTURBED_MOTION": True,  # Re-calculate the perturbed motion fields used for pysteps nowcasting
-    "GENERATE_DETERMINISTIC": True,
-    "OUTPUT_PATH": "/dev/shm/ppn",
-    "STORE_MOTION": True,
-    "STORE_ENSEMBLE": True,
-    "STORE_DETERMINISTIC": True,
-    "SEED": 20190823,
-    "FIELD_VALUES": "dbz",
-    "VALUE_DOMAIN": "dbz",
-    "SCALER": 10,
-    "WRITE_LOG": True,
-    "LOG_LEVEL": logging.DEBUG,
-    "LOG_FOLDER": "/var/tmp/log",
-    "DBZ_MIN": -10,
-    "DBZ_THRESHOLD": -10,
-    "VEL_PERT_KWARGS": {
-        # lucaskanade/fmi values given in pysteps.nowcasts.steps.forecast() method documentation
-        "p_par": [0, 0, 0],
-        "p_perp": [0, 0, 0],
-    },
-}
-
-esteri_archive = {
-    "DOMAIN": "fmi_archived_ravake",
-    "NOWCAST_TIMESTEP": 5,
-    "MAX_LEADTIME": 60,
-    "ENSEMBLE_SIZE": 15,
-    "NUM_WORKERS": 25,
-    "GENERATE_DETERMINISTIC": True,
-    "OUTPUT_PATH": "/dev/shm/ppn",
-    "STORE_MOTION": True,
-    "STORE_ENSEMBLE": True,
-    "STORE_DETERMINISTIC": True,
-    "SEED": 20190823,
-    "FIELD_VALUES": "dbz",
-    "VALUE_DOMAIN": "dbz",
-    "SCALER": 10,
-    "WRITE_LOG": True,
-    "LOG_LEVEL": logging.DEBUG,
-    "LOG_FOLDER": "/var/tmp/log",
-    "DBZ_MIN": -6,
-    "DBZ_THRESHOLD": -6,
-}
-
-docker_ravake = {
-    "DOMAIN": "fmi_realtime_ravake_docker",
-    "NOWCAST_TIMESTEP": 5,
-    "MAX_LEADTIME": 90,
-    "ENSEMBLE_SIZE": 15,
-    "NUM_WORKERS": 30,
-    "GENERATE_UNPERTURBED": True,
-    "REGENERATE_PERTURBED_MOTION": True,  # Re-calculate the perturbed motion fields used for pysteps nowcasting
-    "GENERATE_DETERMINISTIC": True,
-    "OUTPUT_PATH": "~/fmippn-run/fmippn-run-and-distribution/output",
-    "STORE_MOTION": True,
-    "STORE_ENSEMBLE": True,
-    "STORE_DETERMINISTIC": True,
-    "SEED": 20190823,
-    "FIELD_VALUES": "dbz",
-    "VALUE_DOMAIN": "dbz",
-    "SCALER": 10,
-    "WRITE_LOG": True,
-    "LOG_LEVEL": logging.DEBUG,
-    "LOG_FOLDER": "~/fmippn-run/fmippn-run-and-distribution/logs",
-    "DBZ_MIN": -10,
-    "DBZ_THRESHOLD": -10,
-    "VEL_PERT_KWARGS": {
-        # lucaskanade/fmi values given in pysteps.nowcasts.steps.forecast() method documentation
-        "p_par": [0, 0, 0],
-        "p_perp": [0, 0, 0],
-    },
 }

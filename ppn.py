@@ -85,8 +85,6 @@ def run(timestamp=None, config=None, **kwargs):
     time_at_start = dt.datetime.today()
 
     observations, obs_metadata = read_observations(startdate, datasource, importer)
-    if PD["VALUE_DOMAIN"] == "rrate":
-        observations, obs_metadata = dbz_to_dbr(observations, obs_metadata)
 
     motion_field = optflow(observations)
 
@@ -107,7 +105,6 @@ def run(timestamp=None, config=None, **kwargs):
         ensemble_forecast = None
         ens_meta = dict()
 
-    # TODO: Conversion from dBZ (value domain) to rrate (field value) if set up that way
     if PD["GENERATE_UNPERTURBED"]:
         unperturbed, unpert_meta = generate_unperturbed(observations, motion_field, nowcaster,
                                                         nowcast_kwargs, metadata=obs_metadata)
@@ -177,10 +174,9 @@ def get_config(override_name=None):
     if override_name is not None:
         override_params = ppn_config.get_params(override_name)
         if not override_params:
-            warn_msg = ("Couldn't find overriding parameters in ppn_config. "
-                        "Key {} was unrecognised").format(override_name)
-            log("warning", warn_msg)
-            print("Warning: " + warn_msg)
+            no_config_found_msg = ("Couldn't find overriding parameters in "
+                                   "ppn_config. Key '{}' was unrecognised.").format(override_name)
+            raise ValueError(no_config_found_msg)
         params.update(override_params)
 
     # This parameter might not exists in configuration
@@ -276,31 +272,37 @@ def generate_pysteps_setup():
 
     # kwargs for nowcasting method
     nowcast_kwargs = {
+        "n_ens_members": PD["ENSEMBLE_SIZE"],
         "n_cascade_levels": PD["NUM_CASCADES"],
         "kmperpixel": PD["KMPERPIXEL"],
         "timestep": PD["NOWCAST_TIMESTEP"],
+        "extrap_method": "semilagrangian",
+        "noise_method": "nonparametric",
+        "ar_order": 2,
+        "mask_method": "incremental",
         "num_workers": PD["NUM_WORKERS"],
         "fft_method": PD["FFT_METHOD"],
-        "n_ens_members": PD["ENSEMBLE_SIZE"],
         "vel_pert_method": PD["VEL_PERT_METHOD"],
         "vel_pert_kwargs": PD["VEL_PERT_KWARGS"],
         "seed": PD["SEED"],
     }
 
-    # R_MIN needs to be transformed to decibel, so that comparisons can be done
-    # The pysteps method is kinda clunky here, since it expects a numpy array
-    # as input.
+    # This threshold is used in masking and probability masking
+    # rrate units need to be transformed to decibel, so that comparisons can be done
+    r_thr = PD["RAIN_THRESHOLD"]
+    log("debug", f"Using RAIN_THRESHOLD {r_thr} value as prob. match threshold")
+
     if PD["VALUE_DOMAIN"] == "rrate":
-        log("debug", f"Using R_MIN {PD['R_MIN']} value for thresholding")
-        r_min = np.asarray([PD["R_MIN"]])
-        nowcast_kwargs["R_thr"] = pysteps.utils.transformation.dB_transform(r_min)[0][0]
+        nowcast_kwargs["R_thr"] = 10.0 * np.log10(r_thr)
     else:
-        nowcast_kwargs["R_thr"] = PD["DBZ_MIN"]
+        nowcast_kwargs["R_thr"] = r_thr
 
     return datasource, nowcast_kwargs
 
 def read_observations(startdate, datasource, importer):
-    """Read observations from archives using pysteps methods."""
+    """Read observations from archives using pysteps methods. Also threshold
+    the input data and (optionally) convert dBZ -> dBR based on configuration
+    parameters."""
     try:
         filelist = pysteps.io.find_by_date(startdate,
                                            datasource["root_path"],
@@ -318,21 +320,69 @@ def read_observations(startdate, datasource, importer):
     obs, _, metadata = pysteps.io.readers.read_timeseries(filelist,
                                                           importer,
                                                           **datasource["importer_kwargs"])
-    obs[~np.isfinite(obs)] = metadata["zerovalue"]
-    return obs, metadata
 
-def dbz_to_dbr(obs, metadata):
-    """Function to convert data from dBZ units to dBR units"""
-    # Converting dBZ to rain rate
-    obs, metadata = pysteps.utils.conversion.to_rainrate(obs, metadata, PD["ZR_A"], PD["ZR_B"])
+    if PD["VALUE_DOMAIN"] == "rrate":
+        obs, metadata = dbz_to_rrate(obs, metadata)
 
-    # NaNs need to be converted to finite values before decibel transformation
-    obs[~np.isfinite(obs)] = metadata["zerovalue"]
+    obs, metadata = thresholding(obs, metadata, threshold=PD["RAIN_THRESHOLD"],
+                                 norain_value=PD["NORAIN_VALUE"])
 
-    # Decibel transformation (R -> dBR) is done for FFT calculations
-    obs, metadata = pysteps.utils.transformation.dB_transform(obs, metadata)
+    if PD["VALUE_DOMAIN"] == "rrate":
+        obs, metadata = transform_to_decibels(obs, metadata)
 
     return obs, metadata
+
+def dbz_to_rrate(data, metadata):
+    return pysteps.utils.conversion.to_rainrate(data, metadata, PD["ZR_A"], PD["ZR_B"])
+
+def rrate_to_dbz(data, metadata):
+    return pysteps.utils.conversion.to_reflectivity(data, metadata, PD["ZR_A"], PD["ZR_B"])
+
+def transform_to_decibels(data, metadata, inverse=False):
+    """Transform data to decibel units. Assumes thresholded data.
+
+    If argument `inverse` is True, perform transform from decibel units to
+    normal units.
+    """
+    threshold = metadata["threshold"]
+    zerovalue = metadata["zerovalue"]
+    transform = metadata["transform"]
+
+    data = data.copy()
+    metadata = metadata.copy()
+
+    if inverse:
+        log("debug", "Converting data FROM dB units")
+        new_transform = None
+        new_threshold = 10.0 ** (threshold / 10.0)
+        new_zerovalue = 10.0 ** (zerovalue / 10.0)
+        data = 10.0 ** (data / 10.0)
+    else:
+        log("debug", "Converting data TO dB units")
+        new_transform = "dB"
+        new_threshold = 10.0 * np.log10(threshold)
+        new_zerovalue = 10.0 * np.log10(zerovalue)
+        data = 10.0 * np.log10(data)
+
+    metadata["transform"] = new_transform
+    metadata["zerovalue"] = new_zerovalue
+    metadata["threshold"] = new_threshold
+
+    return data, metadata
+
+def thresholding(data, metadata, threshold=None, norain_value=None):
+    if threshold is None:
+        threshold = PD["RAIN_THRESHOLD"]
+    if norain_value is None:
+        norain_value = PD["NORAIN_VALUE"]
+
+    data[~np.isfinite(data)] = norain_value
+    data[data < threshold] = norain_value
+
+    metadata["zerovalue"] = norain_value
+    metadata["threshold"] = threshold
+
+    return data, metadata
 
 def generate(observations, motion_field, nowcaster, nowcast_kwargs, metadata=None):
     """Generate ensemble nowcast using pysteps nowcaster."""
@@ -340,16 +390,16 @@ def generate(observations, motion_field, nowcaster, nowcast_kwargs, metadata=Non
                          **nowcast_kwargs)
 
     if (metadata["unit"] == "mm/h") and (metadata["transform"] == "dB"):
-        forecast, meta = pysteps.utils.transformation.dB_transform(forecast, metadata,
-                                                                   inverse=True)
+        forecast, meta = transform_to_decibels(forecast, metadata, inverse=True)
     else:
         meta = metadata
 
     if PD["FIELD_VALUES"] == "dbz" and metadata["unit"] == "mm/h":
-        forecast, meta = pysteps.utils.conversion.to_reflectivity(forecast,
-                                                                  meta,
-                                                                  PD["ZR_A"],
-                                                                  PD["ZR_B"])
+        forecast, meta = rrate_to_dbz(forecast, meta)
+
+    if PD["FIELD_VALUES"] == "rrate" and metadata["unit"] == "dBZ":
+        forecast, meta = dbz_to_rrate(forecast, meta)
+
     if meta is None:
         meta = dict()
     return forecast, meta
@@ -514,6 +564,8 @@ def write_to_file(startdate, gen_output, nc_fname, metadata=None):
 
         pd_meta = meta.create_group("configuration")
         for key, value in PD.items():
+            if key in ["LOG_FOLDER", "LOG_LEVEL", "OUTPUT_PATH"]:
+                continue
             pd_meta.attrs[key] = str(value)
 
         proj_meta = meta.create_group("projection")

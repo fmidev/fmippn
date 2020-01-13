@@ -32,14 +32,15 @@ How to run:
 
 ## Configuration
 ### Adding new parametrisations
+Create a `json` file with parameters you want to change from defaults and put it in `config` folder. The file's name (without file type extension) will be used to select the settings.
+
+The `ppn_config.py` module has a utility function `dump_defaults()` for creating a configuration file based on default settings.
 
 ### Parametrisations
 Parameter|Explanation|Default value
 ----|----|----
-`DBZ_MIN`|Minimum value used in pystep cascade calculations, when calculation is performed for dBZ units|`-10`
-`DBZ_THRESHOLD`|Thresholding value used by pysteps, when calculation is performed for dBZ units|`-10`
 `DOMAIN`|Data source used from pystepsrc|`fmi`
-`ENSEMBLE_SIZE`|Number of ensemble members|`25`
+`ENSEMBLE_SIZE`|Number of ensemble members|`24`
 `FFT_METHOD`|FFT method used in pysteps calculations|`pyfftw`
 `FIELD_VALUES`|Select the units to store the nowcast (before scaling). Valid units are `dbz` for dBZ and `rrate` for mm/h.|`dbz`
 `GENERATE_DETERMINISTIC`|Calculate extrapolation-only nowcast|`True`
@@ -49,17 +50,17 @@ Parameter|Explanation|Default value
 `LOG_FOLDER`|Path where log files should be stored|`../logs`
 `LOG_LEVEL`|Logging level used by [Python Logging Module](https://docs.python.org/3/library/logging.html#levels)|`20`
 `MAX_LEADTIME`|How long your nowcast will be (in minutes)|`120`
+`NORAIN_VALUE`|Value assigned to dry pixels during thresholding. Units depend on `VALUE_DOMAIN` parameter (dBZ or mm/h). Must be less than `RAIN_THRESHOLD` value!|`1.5`
 `NOWCAST_TIMESTEP`|Timestep between consecutive nowcast images|`5`
-`NUM_CASCADES`|How many cascade levels are used in cascade decomposition by pysteps|`6`
+`NUM_CASCADES`|How many cascade levels are used in cascade decomposition by pysteps|`8`
 `NUM_PREV_OBSERVATIONS`|Number of previous observations used in optical flow calculation|`3`
 `NUM_TIMESTEPS`|How many timesteps will be calculated in nowcasts (If this setting is `None`, this value is automatically calculated based on `MAX_LEADTIME` and `NOWCAST_TIMESTEP` parameters) |`None`
 `NUM_WORKERS`|Number of worker threads used in parallel computing|`6`
 `OPTFLOW_METHOD`|Optical flow method (see pysteps docs)|`lucaskanade`
 `OUTPUT_PATH`|If not `None`, then use this path to store output instead of setting in pysteprc|`None`
 `OUTPUT_TIME_FORMAT`|Python datetime format for showing timestamps|`%Y-%m-%d %H:%M:%S`
+`RAIN_THRESHOLD`|Thresholding value for rain. Pixels with values under this parameter are regarded as dry pixels. Units depend on `VALUE_DOMAIN` parameter (dBZ or mm/h).|`6.5`
 `REGENERATE_PERTURBED_MOTION`|Re-calculate motion for each ensemble member (requires `SEED != None`) |`False`
-`R_MIN`|Minimum value used in pystep cascade calculations, when calculation is performed for mm/h units|`0.1`
-`R_THRESHOLD`|Thresholding value used by pysteps, when calculation is performed for mm/h units|`0.1`
 `SCALER`|Scaling coefficient for output|`100`
 `SCALE_ZERO`|Value for "0" after scaling the output. Setting to `"auto"` or `None` uses the minimum value found in data before scaling.|`auto`
 `SEED`|Seed parameter for random number generation. Use `None` for unseeded nowcasts.|`None`

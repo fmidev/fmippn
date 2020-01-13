@@ -1,0 +1,23 @@
+{
+  "DOMAIN": "fmi_archive",
+  "NOWCAST_TIMESTEP": 5,
+  "MAX_LEADTIME": 30,
+  "ENSEMBLE_SIZE": 5,
+  "SEED": 0,
+  "FIELD_VALUES": "rrate",
+  "VALUE_DOMAIN": "rrate",
+  "GENERATE_DETERMINISTIC": true,
+  "GENERATE_ENSEMBLE": true,
+  "GENERATE_UNPERTURBED": true,
+  "REGENERATE_PERTURBED_MOTION": true,
+  "STORE_DETERMINISTIC": true,
+  "STORE_ENSEMBLE": true,
+  "STORE_UNPERTURBED": true,
+  "STORE_PERTURBED_MOTION": true,
+  "STORE_MOTION": true,
+  "LOG_LEVEL": 10,
+  "WRITE_LOG": false,
+  "OUTPUT_PATH": "./",
+  "RAIN_THRESHOLD": 0.1,
+  "NORAIN_VALUE": 0.03
+}
