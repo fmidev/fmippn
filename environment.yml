@@ -1,4 +1,4 @@
-name: ppn_pysteps14
+name: ppn
 channels:
   - conda-forge
   - defaults
