@@ -101,6 +101,9 @@ def prepare_data_for_writing(forecast, options, forecast_undetect=None, forecast
     fct_scaled[nodata_mask] = store_nodata_value
     prepared_forecast = fct_scaled.astype(store_dtype)
 
+    # Tuuli added masking and filling undetect value:
+    undetect_mask = (fct_scaled == undetect)
+    fct_scaled[undetect_mask] = options.get('set_undetect_value_to')
 
     metadata = {
         "nodata": store_nodata_value,
