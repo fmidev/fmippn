@@ -37,7 +37,7 @@
     "leadtimes": null,
     "nowcast_timestep": 1,
     "num_prev_observations": 3,
-    "max_leadtime": 60,
+    "max_leadtime": 240,
     "run_deterministic": true,
     "run_ensemble": false,
     "regenerate_perturbed_motion": false,
