@@ -2,7 +2,7 @@
   "data_source": {
     "root_path": "/input",
     "path_fmt": "",
-    "fn_pattern": "%Y%m%d%H%M_radar.rack.comp_CONF=FMIPPN-SMALL,ANDRE",
+    "fn_pattern": "%Y%m%d%H%M_radar.rack.comp_CONF=HULEHENRI,ANDRE",
     "fn_ext": "h5",
     "importer": "opera_hdf5",
     "timestep": 5,
@@ -19,7 +19,7 @@
   },
   "output_options": {
     "as_quantity": "DBZH",
-    "store_ensemble": true,
+    "store_ensemble": false,
     "store_deterministic": true,
     "store_motion": true,
     "store_perturbed_motion": false,
@@ -35,11 +35,11 @@
   },
   "run_options": {
     "leadtimes": null,
-    "nowcast_timestep": 5,
+    "nowcast_timestep": 1,
     "num_prev_observations": 3,
     "max_leadtime": 240,
     "run_deterministic": true,
-    "run_ensemble": true,
+    "run_ensemble": false,
     "regenerate_perturbed_motion": false,
     "motion_method": "lucaskanade",
     "nowcast_method": "steps",
