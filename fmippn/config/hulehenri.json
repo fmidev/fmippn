@@ -48,7 +48,7 @@
     "steps_set_no_rain_to_value": -16
   },
   "nowcast_options": {
-    "kmperpixel": 2.0,
+    "kmperpixel": 0.5,
     "timestep": 5,
     "fft_method": "pyfftw",
     "n_ens_members": 20,

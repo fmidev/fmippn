@@ -35,7 +35,7 @@
   },
   "run_options": {
     "leadtimes": null,
-    "nowcast_timestep": 5,
+    "nowcast_timestep": 1,
     "num_prev_observations": 3,
     "max_leadtime": 240,
     "run_deterministic": true,
@@ -48,7 +48,7 @@
     "steps_set_no_rain_to_value": -16
   },
   "nowcast_options": {
-    "kmperpixel": 2.0,
+    "kmperpixel": 1.0,
     "timestep": 5,
     "fft_method": "pyfftw",
     "n_ens_members": 15,
