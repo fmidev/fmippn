@@ -1,10 +1,10 @@
 #!/bin/bash
 
 export HDF5_USE_FILE_LOCKING=FALSE
-DOMAIN=${DOMAIN:-'ravake'}
+DOMAIN=${DOMAIN:-"ravake"}
 
 #List latest file in domain folder
-INPATH=/tutka/data/input_composites/$DOMAIN/
+INPATH=${INPATH:-"/tutka/data/input_composites/$DOMAIN/"}
 LATEST_TIMESTAMP=`ls -t $INPATH | head -n1 | awk -F "_" '{print $1}'`
 
 TIMESTAMP=${TIMESTAMP:-${LATEST_TIMESTAMP}}
@@ -13,10 +13,10 @@ TIMESTAMP=${TIMESTAMP:-${LATEST_TIMESTAMP}}
 #Read short hostname from server to use as output folder names.
 HOSTNAME=`hostname -s`
 NODE=${NODE:-${HOSTNAME}}
-OUTPATH=/tutka/data/dev/cache/radar/fmippn/${NODE}
+OUTPATH=${OUTPATH:-"/tutka/data/dev/cache/radar/fmippn/${NODE}"}
 
 #Log path
-LOGPATH=/tutka/data/dev/cache/log/fmippn/${NODE}
+LOGPATH=${LOGPATH:-"/tutka/data/dev/cache/log/fmippn/${NODE}"}
 
 echo INPATH: $INPATH
 echo OUTPATH: $OUTPATH

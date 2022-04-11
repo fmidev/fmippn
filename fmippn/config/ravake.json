@@ -51,9 +51,9 @@
     "kmperpixel": 2.0,
     "timestep": 5,
     "fft_method": "pyfftw",
-    "n_ens_members": 20,
+    "n_ens_members": 15,
     "n_cascade_levels": 8,
-    "num_workers": 20,
+    "num_workers": 15,
     "domain": "spectral",
     "vel_pert_method": "bps",
     "vel_pert_kwargs": {
