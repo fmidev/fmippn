@@ -6,8 +6,9 @@ heavily based on pySTEPS initiative.
 
 For more information about pySTEPS, see https://pysteps.github.io .
 
-Author: Petteri Karsisto
-Year: 2019
+Original code by Petteri Karsisto, 2019
+ODIM output option and callback function added by Tuuli Perttula, 2021
+
 """
 import datetime as dt
 import random
@@ -390,6 +391,8 @@ def generate_pysteps_setup():
 
     if PD["output_options"].get("write_leadtimes_separately", False):
         nowcast_kwargs["callback"] = cb_nowcast
+        # Do not store whole forecast array but write out step by step
+        nowcast_kwargs["return_output"] = False
 
     return nowcast_kwargs
 

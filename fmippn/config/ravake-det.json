@@ -19,7 +19,7 @@
   },
   "output_options": {
     "as_quantity": "DBZH",
-    "store_ensemble": true,
+    "store_ensemble": false,
     "store_deterministic": true,
     "store_motion": true,
     "store_perturbed_motion": false,
@@ -35,11 +35,11 @@
   },
   "run_options": {
     "leadtimes": null,
-    "nowcast_timestep": 5,
+    "nowcast_timestep": 1,
     "num_prev_observations": 3,
     "max_leadtime": 240,
     "run_deterministic": true,
-    "run_ensemble": true,
+    "run_ensemble": false,
     "regenerate_perturbed_motion": false,
     "motion_method": "lucaskanade",
     "nowcast_method": "steps",
@@ -51,7 +51,7 @@
     "kmperpixel": 1.0,
     "timestep": 5,
     "fft_method": "pyfftw",
-    "n_ens_members": 15,
+    "n_ens_members": 2,
     "n_cascade_levels": 8,
     "num_workers": 15,
     "domain": "spectral",
@@ -71,7 +71,7 @@
     "seed": null
   },
   "callback_options": {
-      "tmp_folder": ""
+    "tmp_folder": ""
   },
   "logging": {
     "write_log": true,

@@ -71,7 +71,7 @@
     "seed": null
   },
   "callback_options": {
-      "tmp_folder": ""
+    "tmp_folder": ""
   },
   "logging": {
     "write_log": true,
