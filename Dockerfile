@@ -21,12 +21,12 @@ RUN conda install -y python=3 \
 WORKDIR .
 RUN mkdir input output log
 
-# Copy fmippn directory
-COPY fmippn /fmippn
-
 # Create conda environment
 COPY environment.yml .
 RUN conda env create -f environment.yml -n fmippn
+
+# Copy fmippn directory
+COPY fmippn /fmippn
 
 # Disable dask
 RUN export OMP_NUM_THREADS=1

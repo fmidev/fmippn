@@ -193,23 +193,30 @@ def run(timestamp=None, config=None, **kwargs):
         det_meta = dict()
 
     if run_options.get("run_ensemble"):
-        ensemble_forecast, ens_meta = generate(observations, motion_field, nowcaster,
-                                               nowcast_kwargs, metadata=obs_metadata)
-        PD["ensemble_size"] = ensemble_forecast.shape[0]
         if output_options.get("write_leadtimes_separately", False):
-            # Add any combining and cleanup here, if needed
+            # Run forecast without saving it here, saving through callback function
             log("debug", "Callback was requested, will skip saving regardless of settings")
-        elif output_options.get("store_ensemble", False) and output_options.get("write_asap", False):
-            log("info", "write_asap requested, writing ensemble nowcast now...")
-            _out, _out_meta = prepare_data_for_writing(ensemble_forecast)
-            asap_meta["scale_meta"] = _out_meta
-            asap_meta["startdate"] = startdate
-            asap_meta["unit"] = ens_meta["unit"]
-            odim_io.write_ensemble_to_file(PD, _out, ensemble_output_fname, metadata=asap_meta)
-            # Release memory
-            _out = None
+            nowcaster(observations, motion_field, PD["run_options"]["leadtimes"],
+                         **nowcast_kwargs)
             ensemble_forecast = None
             ens_meta = dict()
+            PD["ensemble_size"] = None
+        else:
+            ensemble_forecast, ens_meta = generate(observations, motion_field, nowcaster,
+                                                nowcast_kwargs, metadata=obs_metadata)
+            PD["ensemble_size"] = ensemble_forecast.shape[0]
+        
+            if output_options.get("store_ensemble", False) and output_options.get("write_asap", False):
+                log("info", "write_asap requested, writing ensemble nowcast now...")
+                _out, _out_meta = prepare_data_for_writing(ensemble_forecast)
+                asap_meta["scale_meta"] = _out_meta
+                asap_meta["startdate"] = startdate
+                asap_meta["unit"] = ens_meta["unit"]
+                odim_io.write_ensemble_to_file(PD, _out, ensemble_output_fname, metadata=asap_meta)
+                # Release memory
+                _out = None
+                ensemble_forecast = None
+                ens_meta = dict()
     else:
         ensemble_forecast = None
         ens_meta = dict()
