@@ -390,6 +390,8 @@ def generate_pysteps_setup():
 
     if PD["output_options"].get("write_leadtimes_separately", False):
         nowcast_kwargs["callback"] = cb_nowcast
+        # Do not store whole forecast array but write out step by step
+        nowcast_kwargs["return_output"] = False
 
     return nowcast_kwargs
 
