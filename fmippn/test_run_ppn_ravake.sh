@@ -1,5 +1,5 @@
 #!/bin/bash
 
-cmd="conda run -n ppn_pysteps14 python run_ppn.py --config=ravake --timestamp=202011191050"
+cmd="conda run -n fmippn python run_ppn.py --config=test_ravake --timestamp=202211230815"
 echo $cmd
 eval $cmd

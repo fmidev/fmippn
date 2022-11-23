@@ -641,8 +641,8 @@ def write_deterministic_separate_odim_output(field, metadata, store_meta):
     
     for i in range(field.shape[0]):
         timestep=PD["run_options"]["nowcast_timestep"]
-        timestamp = PD["startdate"] + (i+1) * dt.timedelta(minutes=timestep)
-        fname = f"{PD['startdate']:%Y%m%d%H%M}+{(i+1)*timestep:03}min_radar.fmippn.det_conf={PD['config']}.h5"
+        timestamp = (PD["startdate"] + (i+1) * dt.timedelta(minutes=timestep)).strftime('%Y%m%d%H%M')
+        fname = f"{PD['startdate']:%Y%m%d%H%M}_{timestamp}_nclen={(i+1)*timestep:03}min_radar.fmippn.det_conf={PD['config']}.h5"
         with h5py.File(folder.joinpath(fname), 'w') as f:
             write_odim_output_separately(f, i, field[i,:,:], metadata, store_meta, fc_type="det")
 
@@ -657,7 +657,7 @@ def cb_nowcast(field):
     cb_nowcast.counter += 1
     
     timestep=PD["run_options"]["nowcast_timestep"]
-    timestamp = PD["startdate"] + cb_nowcast.counter * dt.timedelta(minutes=timestep)
+    timestamp = (PD["startdate"] + cb_nowcast.counter * dt.timedelta(minutes=timestep)).strftime('%Y%m%d%H%M')
     folder = PD["callback_options"]["tmp_folder"]
 
     # Process data to wanted output format
@@ -666,7 +666,7 @@ def cb_nowcast(field):
     # Store each ensemble member separately
     for i in range(field.shape[0]):
         member=i+1
-        fname = f"{PD['startdate']:%Y%m%d%H%M}+{cb_nowcast.counter*timestep:03}min_radar.fmippn.ens_conf={PD['config']}_ensmem={member}.h5"
+        fname = f"{PD['startdate']:%Y%m%d%H%M}_{timestamp}_nclen={cb_nowcast.counter*timestep:03}min_radar.fmippn.ens_conf={PD['config']}_ensmem={member}.h5"
         with h5py.File(folder.joinpath(fname), 'w') as f:
 
             write_odim_output_separately(f, n_timestep, field[i,:,:], metadata, store_meta, fc_type="ens")
