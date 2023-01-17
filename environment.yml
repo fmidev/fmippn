@@ -7,6 +7,8 @@ dependencies:
   - git
   - numpy
   - scipy
+  - scikit-image
+  - opencv
   - h5py
   - pillow
   - pysteps=1.7
