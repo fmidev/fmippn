@@ -271,22 +271,27 @@ defaults = {
     "nowcast_options": {
         # Default to the nowcast method defaults
         # n_ens_members = 24,
-        "n_cascade_levels": 6,  # pysteps default for steps
-        "fft_method": "pyfftw",
+        "method_specific_options": {
+            "steps": {
+                "n_cascade_levels": 6,  # pysteps default for STEPS
+                "fft_method": "pyfftw",
+                "domain": "spectral",  # pysteps default
+                "noise_method": "nonparametric",
+                "ar_order": 2,
+                "mask_method": "incremental",
+            },
+            "linda": {},
+        },
         "vel_pert_method": "bps",  # pysteps default, requires kmperpixel to be set
         "vel_pert_kwargs": {
             # lucaskanade/fmi values given in pysteps.nowcasts.steps.forecast() method documentation
             "p_par": [2.20837526, 0.33887032, -2.48995355],
             "p_perp": [2.21722634, 0.32359621, -2.57402761],
         },
-        "domain": "spectral",  # pysteps default
         "num_workers": 6,  # pysteps defaults to 1, we want more.
         "seed": None,  # pysteps default
         # Previously hardcoded values
         "extrap_method": "semilagrangian",
-        "noise_method": "nonparametric",
-        "ar_order": 2,
-        "mask_method": "incremental",
         # Required parameters that need to be calculated or defined
         # "kmperpixel": # required for motion perturbation method (bps)
         # "timestep": # "Timestep" of MOTION VECTOR, get from input data

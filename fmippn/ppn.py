@@ -129,8 +129,13 @@ def run(timestamp=None, config=None, **kwargs):
     PD["input_quantity"] = input_quantity
 
     # generate suitable objects for passing to pysteps methods
-    if run_options["nowcast_method"] == "steps":
-        nowcast_kwargs = generate_pysteps_setup()
+    # based on the selected model
+    if run_options["nowcast_method"] in ["steps", "linda"]:
+        nowcast_kwargs = generate_pysteps_setup(method=run_options["nowcast_method"])
+    else:
+        raise NotImplementedError(
+            f"nowcast_method = {run_options['nowcast_method']} not implemented, possible values are 'steps' and 'linda'"
+        )
 
     observations, obs_metadata = read_observations(input_files, datasource, importer)
 
@@ -425,11 +430,15 @@ def deterministic_method(module="pysteps", **kwargs):
     raise ValueError("Unknown module {} for deterministic method".format(module))
 
 
-def generate_pysteps_setup():
+def generate_pysteps_setup(method="steps"):
     """Generate `nowcast_kwargs` objects that are suitable
     for using in pysteps nowcasting methods."""
     # kwargs for nowcasting method
     nowcast_kwargs = PD.get("nowcast_options")
+
+    # Get options for this model specifically
+    nowcast_kwargs.update(nowcast_kwargs.get("method_specific_options").get(method))
+    nowcast_kwargs.pop("method_specific_options", None)
 
     # This threshold is used in masking and probability masking
     # rrate units need to be transformed to decibel, so that comparisons can be done
@@ -443,17 +452,23 @@ def generate_pysteps_setup():
     zr_a = PD["data_options"]["zr_a"]
     zr_b = PD["data_options"]["zr_b"]
 
+    dbr_thr = None
     if utils.quantity_is_dbzh(input_qty) and utils.quantity_is_rate(fct_qty):
+        # Transform threshold, given in Z, to rain rate
         r_thr = (r_thr / zr_a) ** (1.0 / zr_b)
-        nowcast_kwargs["precip_thr"] = max(10.0 * np.log10(r_thr), 0)  #
+        # Convert to dBR and dont allow negative values
+        dbr_thr = max(10.0 * np.log10(r_thr), 0)
         log("info", 'Converted RATE rain_threshold to decibel units ("dBR").')
     elif utils.quantity_is_rate(input_qty) and utils.quantity_is_dbzh(fct_qty):
+        # Transform threshold, given in rain rate, to Z
         r_thr = zr_a * r_thr ** zr_b
-        nowcast_kwargs["precip_thr"] = r_thr
-    else:
-        nowcast_kwargs["precip_thr"] = r_thr
 
     PD["converted_rain_thr"] = r_thr  # DBZH or non-decibel RATE is used in thresholding
+
+    if method == "steps":
+        # STEPS-specific options derived from other configurations
+        # Threshold for masking
+        nowcast_kwargs["precip_thr"] = dbr_thr if dbr_thr is not None else r_thr
 
     if PD["output_options"].get("write_leadtimes_separately", False):
         nowcast_kwargs["callback"] = cb_nowcast
