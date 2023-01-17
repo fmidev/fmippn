@@ -385,14 +385,14 @@ def generate_pysteps_setup():
     zr_b = PD["data_options"]["zr_b"]
 
     if utils.quantity_is_dbzh(input_qty) and utils.quantity_is_rate(fct_qty):
-        r_thr = (r_thr / zr_a) ** (1. / zr_b)
-        nowcast_kwargs["R_thr"] = max(10.0 * np.log10(r_thr), 0)  #
+        r_thr = (r_thr / zr_a) ** (1.0 / zr_b)
+        nowcast_kwargs["precip_thr"] = max(10.0 * np.log10(r_thr), 0)  #
         log("info", 'Converted RATE rain_threshold to decibel units ("dBR").')
     elif utils.quantity_is_rate(input_qty) and utils.quantity_is_dbzh(fct_qty):
         r_thr = zr_a * r_thr ** zr_b
-        nowcast_kwargs["R_thr"] = r_thr
+        nowcast_kwargs["precip_thr"] = r_thr
     else:
-        nowcast_kwargs["R_thr"] = r_thr
+        nowcast_kwargs["precip_thr"] = r_thr
 
     PD["converted_rain_thr"] = r_thr  # DBZH or non-decibel RATE is used in thresholding
 

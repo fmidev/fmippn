@@ -250,7 +250,7 @@ defaults = {
         # Required parameters that need to be calculated or defined
         #"kmperpixel": # required for motion perturbation method (bps)
         #"timestep": # "Timestep" of MOTION VECTOR, get from input data
-        #"R_thr":  # must be in decibel units...
+        # "precip_thr":  # must be in decibel units...
     },
 
     "output_options": {
