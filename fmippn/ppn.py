@@ -461,14 +461,14 @@ def generate_pysteps_setup(method="steps"):
 
     dbr_thr = None
     if utils.quantity_is_dbzh(input_qty) and utils.quantity_is_rate(fct_qty):
-        # Transform threshold, given in Z, to rain rate
-        r_thr = (r_thr / zr_a) ** (1.0 / zr_b)
+        # Transform threshold, given in dBZ, to rain rate
+        r_thr = (10 ** (r_thr / 10.0) / zr_a) ** (1.0 / zr_b)
         # Convert to dBR and dont allow negative values
         dbr_thr = max(10.0 * np.log10(r_thr), 0)
         log("info", 'Converted RATE rain_threshold to decibel units ("dBR").')
     elif utils.quantity_is_rate(input_qty) and utils.quantity_is_dbzh(fct_qty):
-        # Transform threshold, given in rain rate, to Z
-        r_thr = zr_a * r_thr ** zr_b
+        # Transform threshold, given in rain rate, to dBZ
+        r_thr = 10 * np.log10(zr_a * r_thr ** zr_b)
 
     PD["converted_rain_thr"] = r_thr  # DBZH or non-decibel RATE is used in thresholding
 
@@ -476,6 +476,10 @@ def generate_pysteps_setup(method="steps"):
         # STEPS-specific options derived from other configurations
         # Threshold for masking
         nowcast_kwargs["precip_thr"] = dbr_thr if dbr_thr is not None else r_thr
+    elif method == "linda":
+        # LINDA-specific options derived from other configurations
+        # Threshold for masking
+        pass
 
     if PD["output_options"].get("write_leadtimes_separately", False):
         nowcast_kwargs["callback"] = cb_nowcast
@@ -529,7 +533,7 @@ def read_observations(filelist, datasource, importer):
         norain_value=PD["run_options"]["steps_set_no_rain_to_value"],
     )
 
-    if utils.quantity_is_rate(fct_qty):
+    if utils.quantity_is_rate(fct_qty) and PD["run_options"]["transform_to_dBR"]:
         obs, metadata = transform_to_decibels(obs, metadata)
 
     return obs, metadata
