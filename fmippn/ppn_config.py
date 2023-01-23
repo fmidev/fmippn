@@ -282,7 +282,7 @@ defaults = {
             },
             "linda": {
                 "max_num_features": 25,
-                "feature_method": "shitomasi",
+                "feature_method": "domain",
                 "feature_kwargs": {},
                 "ari_order": 1,
                 "kernel_type": "anisotropic",
