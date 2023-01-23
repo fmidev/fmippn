@@ -290,6 +290,7 @@ def run(timestamp=None, config=None, **kwargs):
         "projection": projection_meta,
         "time_at_start": time_at_start,
         "time_at_end": time_at_end,
+        "startdate": startdate,
     }
 
     # FIXME: temporary hack to prevent crashes during saving the output
@@ -315,10 +316,16 @@ def run(timestamp=None, config=None, **kwargs):
         if output_options.get("store_ensemble") and not output_options.get(
             "write_leadtimes_separately"
         ):
+            ensemble_forecast, ens_scale_meta = prepare_data_for_writing(
+                ensemble_forecast
+            )
+            store_meta["scale_meta"] = ens_scale_meta
             odim_io.write_ensemble_to_file(
                 PD, ensemble_forecast, ensemble_output_fname, metadata=store_meta
             )
         if output_options.get("store_deterministic"):
+            deterministic, det_scale_meta = prepare_data_for_writing(deterministic)
+            store_meta["scale_meta"] = det_scale_meta
             odim_io.write_deterministic_to_file(
                 PD, deterministic, determ_output_fname, metadata=store_meta
             )
@@ -827,6 +834,19 @@ def write_odim_output_separately(
     how_grp.attrs["num_timesteps"] = PD["run_options"]["leadtimes"]
     how_grp.attrs["nowcast_timestep"] = PD["run_options"]["nowcast_timestep"]
     how_grp.attrs["max_leadtime"] = PD["run_options"]["max_leadtime"]
+
+    # Write model specific metadata into /how group
+    if PD["run_options"]["nowcast_method"] == "steps":
+        how_grp.attrs["ensemble_nowcast_method"] = "steps"
+        how_grp.attrs["domain"] = PD["nowcast_options"]["domain"]
+        how_grp.attrs["n_cascade_levels"] = PD["nowcast_options"]["n_cascade_levels"]
+    elif PD["run_options"]["nowcast_method"] == "linda":
+        how_grp.attrs["ensemble_nowcast_method"] = "linda"
+        how_grp.attrs["feature_method"] = PD["nowcast_options"]["feature_method"]
+        how_grp.attrs["ari_order"] = str(PD["nowcast_options"]["ari_order"])
+        how_grp.attrs["max_num_features"] = str(
+            PD["nowcast_options"]["max_num_features"]
+        )
 
     # Store ensemble forecast specific metadata
     if fc_type == "ens":

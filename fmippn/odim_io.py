@@ -140,7 +140,6 @@ def _write(data, filename, metadata, configuration, optype=None):
 
         # Common groups
         how_grp = outf["how"]
-        how_grp.attrs["domain"] = configuration["nowcast_options"]["domain"]
 
         # Write AMVU and AMVV datasets and add attributes
         if optype == "mot":
@@ -204,10 +203,6 @@ def _write(data, filename, metadata, configuration, optype=None):
             # FIXME: "nowcast_timestep" might not be constants, see above
             how_grp.attrs["nowcast_timestep"] = nowcast_timestep
             how_grp.attrs["max_leadtime"] = configuration["run_options"]["max_leadtime"]
-            default_cascade_levels = defaults["nowcast_options"]["n_cascade_levels"]
-            how_grp.attrs["n_cascade_levels"] = configuration["nowcast_options"].get(
-                "n_cascade_levels", default_cascade_levels
-            )
 
         # Write ensemble forecast timeseries in ODIM format
         elif optype == "ens":
@@ -243,9 +238,26 @@ def _write(data, filename, metadata, configuration, optype=None):
             # FIXME: "nowcast_timestep" might not be constants, see above
             how_grp.attrs["nowcast_timestep"] = nowcast_timestep
             how_grp.attrs["max_leadtime"] = configuration["run_options"]["max_leadtime"]
-            default_cascade_levels = defaults["nowcast_options"]["n_cascade_levels"]
-            how_grp.attrs["n_cascade_levels"] = configuration["nowcast_options"].get(
-                "n_cascade_levels", default_cascade_levels
-            )
+
+        if optype in ["det", "ens"]:
+            # Write model specific metadata into /how group
+            if configuration["run_options"]["nowcast_method"] == "steps":
+                how_grp.attrs["ensemble_nowcast_method"] = "steps"
+                how_grp.attrs["domain"] = configuration["nowcast_options"]["domain"]
+                default_cascade_levels = defaults["nowcast_options"]["n_cascade_levels"]
+                how_grp.attrs["n_cascade_levels"] = configuration[
+                    "nowcast_options"
+                ].get("n_cascade_levels", default_cascade_levels)
+            elif configuration["run_options"]["nowcast_method"] == "linda":
+                how_grp.attrs["ensemble_nowcast_method"] = "linda"
+                how_grp.attrs["feature_method"] = configuration["nowcast_options"][
+                    "feature_method"
+                ]
+                how_grp.attrs["ari_order"] = str(
+                    configuration["nowcast_options"]["ari_order"]
+                )
+                how_grp.attrs["max_num_features"] = str(
+                    configuration["nowcast_options"]["max_num_features"]
+                )
 
     return None
