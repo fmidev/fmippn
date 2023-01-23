@@ -190,12 +190,28 @@ def run(timestamp=None, config=None, **kwargs):
         PD["nowcast_options"]["seed"] = random.randrange(2 ** 32 - 1)
 
     if run_options.get("run_deterministic"):
-        deterministic, det_meta = generate_deterministic(
-            observations[-1],
-            motion_field,
-            deterministic_nowcaster,
-            metadata=obs_metadata,
-        )
+        # Get correct input slice for deterministic nowcast
+        if PD["run_options"]["deterministic_method"] == "linda":
+            det_nowcast_kwargs = nowcast_kwargs.copy()
+            det_nowcast_kwargs["add_perturbations"] = False
+            det_nowcast_kwargs["return_output"] = True
+            det_nowcast_kwargs["callback"] = None
+            # LINDA needs the last ari_order+2 observations
+            deterministic, det_meta = generate_deterministic(
+                observations[-(nowcast_kwargs["ari_order"] + 2) :],
+                motion_field,
+                deterministic_nowcaster,
+                metadata=obs_metadata,
+                nowcast_kwargs=det_nowcast_kwargs,
+            )
+        else:
+            # Extrapolation method with one input timestep
+            deterministic, det_meta = generate_deterministic(
+                observations[-1],
+                motion_field,
+                deterministic_nowcaster,
+                metadata=obs_metadata,
+            )
         if output_options.get("store_deterministic", False) and output_options.get(
             "write_asap", False
         ):
@@ -678,7 +694,7 @@ def _convert_for_output(value, out_qty):
 def generate_deterministic(
     observations, motion_field, nowcaster, nowcast_kwargs=None, metadata=None
 ):
-    """Generate a deterministic nowcast using semilagrangian extrapolation"""
+    """Generate a deterministic nowcast"""
     # Extrapolation scheme doesn't use the same nowcast_kwargs as steps
     if nowcast_kwargs is None:
         nowcast_kwargs = dict()
