@@ -280,7 +280,18 @@ defaults = {
                 "ar_order": 2,
                 "mask_method": "incremental",
             },
-            "linda": {},
+            "linda": {
+                "max_num_features": 25,
+                "feature_method": "shitomasi",
+                "feature_kwargs": {},
+                "ari_order": 1,
+                "kernel_type": "anisotropic",
+                "localization_window_radius": None,
+                "errdist_window_radius": None,
+                "acf_window_radius": None,
+                "extrap_kwargs": {},
+                "pert_thrs": (0.5, 1.0),
+            },
         },
         "vel_pert_method": "bps",  # pysteps default, requires kmperpixel to be set
         "vel_pert_kwargs": {
@@ -337,6 +348,7 @@ defaults = {
         "deterministic_method": "extrapolation",
         #
         "forecast_as_quantity": "DBZH",  # Input data is converted to this before nowcasting
+        "transform_to_dBR": True,  # Convert to decibel rain rate before nowcasting (only used if forecast_as_quantity is RATE)
         "steps_set_no_rain_to_value": -10,  # In forecast quantity units
     },
     # Used when writing ensemble nowcasts after each timestep with callback function
