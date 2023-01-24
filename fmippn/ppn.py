@@ -28,6 +28,7 @@ import odim_io
 PD = dict()
 PD_callback = dict()
 
+
 def run(timestamp=None, config=None, **kwargs):
     """Main function for FMI-PPN.
 
@@ -43,8 +44,10 @@ def run(timestamp=None, config=None, **kwargs):
 
     PD.update(ppn_config.get_config(config))
 
-    initialise_logging(log_folder=PD["logging"]["log_folder"],
-                       log_fname="ppn-{:%Y%m%d}.log".format(dt.datetime.utcnow()))
+    initialise_logging(
+        log_folder=PD["logging"]["log_folder"],
+        log_fname="ppn-{:%Y%m%d}.log".format(dt.datetime.utcnow()),
+    )
 
     log("info", "Program starting.")
     log("debug", "Start setup")
@@ -61,7 +64,7 @@ def run(timestamp=None, config=None, **kwargs):
 
     PD["startdate"] = startdate
     PD["config"] = config
-        
+
     if nc_fname is None:
         nc_fname = "nc_{:%Y%m%d%H%M}.h5".format(startdate)
         nc_fname_templ = "{date:%Y%m%d%H%M}_radar.fmippn.{tag}_conf={config}.h5"
@@ -85,14 +88,20 @@ def run(timestamp=None, config=None, **kwargs):
     output_options = PD["output_options"]
 
     # Output filenames
-    motion_output_fname = output_options["path"].joinpath(nc_fname_templ.format(date=startdate, tag="motion", config=config))
-    ensemble_output_fname = output_options["path"].joinpath(nc_fname_templ.format(date=startdate, tag="ens", config=config))
-    determ_output_fname = output_options["path"].joinpath(nc_fname_templ.format(date=startdate, tag="det", config=config))
+    motion_output_fname = output_options["path"].joinpath(
+        nc_fname_templ.format(date=startdate, tag="motion", config=config)
+    )
+    ensemble_output_fname = output_options["path"].joinpath(
+        nc_fname_templ.format(date=startdate, tag="ens", config=config)
+    )
+    determ_output_fname = output_options["path"].joinpath(
+        nc_fname_templ.format(date=startdate, tag="det", config=config)
+    )
 
     # pysteps callback output folder setup
     if run_options["run_ensemble"] and output_options["write_leadtimes_separately"]:
         PD["callback_options"]["tmp_folder"].mkdir(parents=True, exist_ok=True)
-        
+
     log("debug", "Setup finished")
 
     # NOWCASTING
@@ -106,7 +115,9 @@ def run(timestamp=None, config=None, **kwargs):
 
     if datasource["importer"] in {"opera_hdf5", "odim_hdf5"}:
         input_quantity = datasource["importer_kwargs"]["qty"]
-        odim_metadata = utils.get_odim_attrs_from_input(input_files[0][-1])  # input_files is a tuple of two lists
+        odim_metadata = utils.get_odim_attrs_from_input(
+            input_files[0][-1]
+        )  # input_files is a tuple of two lists
         data_undetect = utils.get_odim_data_undetect(input_files[0][-1], input_quantity)
     else:
         # Cannot read ODIM metadata from non-ODIM files (.pgm)
@@ -118,14 +129,19 @@ def run(timestamp=None, config=None, **kwargs):
     PD["input_quantity"] = input_quantity
 
     # generate suitable objects for passing to pysteps methods
-    if run_options["nowcast_method"] == "steps":
-        nowcast_kwargs = generate_pysteps_setup()
+    # based on the selected model
+    if run_options["nowcast_method"] in ["steps", "linda"]:
+        nowcast_kwargs = generate_pysteps_setup(method=run_options["nowcast_method"])
+    else:
+        raise NotImplementedError(
+            f"nowcast_method = {run_options['nowcast_method']} not implemented, possible values are 'steps' and 'linda'"
+        )
 
     observations, obs_metadata = read_observations(input_files, datasource, importer)
 
     # Save obs_metadata in callback function (global dictionary)
-    PD_callback['obs_metadata'] = obs_metadata
-    
+    PD_callback["obs_metadata"] = obs_metadata
+
     projection_meta = {
         "projstr": obs_metadata["projection"],
         "x1": obs_metadata["x1"],
@@ -147,9 +163,13 @@ def run(timestamp=None, config=None, **kwargs):
 
     # TODO: Convert motion field timestep, if needed?
 
-    if output_options.get("store_motion", False) and output_options.get("write_asap", False):
+    if output_options.get("store_motion", False) and output_options.get(
+        "write_asap", False
+    ):
         log("info", "write_asap requested, writing motion field now...")
-        odim_io.write_motion_to_file(PD, motion_field, motion_output_fname, metadata=asap_meta)
+        odim_io.write_motion_to_file(
+            PD, motion_field, motion_output_fname, metadata=asap_meta
+        )
 
     # Regenerate ensemble motion
     if run_options.get("regenerate_perturbed_motion"):
@@ -158,32 +178,56 @@ def run(timestamp=None, config=None, **kwargs):
         log("info", "Regenerating ensemble motion fields...")
         ensemble_motion = regenerate_ensemble_motion(motion_field, nowcast_kwargs)
         log("info", "Finished regeneration.")
-        if output_options.get("store_perturbed_motion", False) and output_options.get("write_asap", False):
+        if output_options.get("store_perturbed_motion", False) and output_options.get(
+            "write_asap", False
+        ):
             raise NotImplementedError
     else:
         ensemble_motion = None
 
     # If seed is none, make a random seed.
     if PD["nowcast_options"].get("seed") is None:
-        PD["nowcast_options"]["seed"] = random.randrange(2**32-1)
+        PD["nowcast_options"]["seed"] = random.randrange(2 ** 32 - 1)
 
     if run_options.get("run_deterministic"):
-        deterministic, det_meta = generate_deterministic(observations[-1],
-                                                         motion_field,
-                                                         deterministic_nowcaster,
-                                                         metadata=obs_metadata)
-        if output_options.get("store_deterministic", False) and output_options.get("write_asap", False):
+        # Get correct input slice for deterministic nowcast
+        if PD["run_options"]["deterministic_method"] == "linda":
+            det_nowcast_kwargs = nowcast_kwargs.copy()
+            det_nowcast_kwargs["add_perturbations"] = False
+            det_nowcast_kwargs["return_output"] = True
+            det_nowcast_kwargs["callback"] = None
+            # LINDA needs the last ari_order+2 observations
+            deterministic, det_meta = generate_deterministic(
+                observations[-(nowcast_kwargs["ari_order"] + 2) :],
+                motion_field,
+                deterministic_nowcaster,
+                metadata=obs_metadata,
+                nowcast_kwargs=det_nowcast_kwargs,
+            )
+        else:
+            # Extrapolation method with one input timestep
+            deterministic, det_meta = generate_deterministic(
+                observations[-1],
+                motion_field,
+                deterministic_nowcaster,
+                metadata=obs_metadata,
+            )
+        if output_options.get("store_deterministic", False) and output_options.get(
+            "write_asap", False
+        ):
             log("info", "write_asap requested, writing deterministic nowcast now...")
             _out, _out_meta = prepare_data_for_writing(deterministic)
             asap_meta["scale_meta"] = _out_meta
             asap_meta["startdate"] = startdate
             asap_meta["unit"] = det_meta["unit"]
-            
+
             if output_options.get("write_leadtimes_separately", False):
                 log("info", "separate output requested for deterministic nowcast")
-                write_deterministic_separate_odim_output(_out, asap_meta, _out_meta)                
+                write_deterministic_separate_odim_output(_out, asap_meta, _out_meta)
             else:
-                odim_io.write_deterministic_to_file(PD, _out, determ_output_fname, metadata=asap_meta)      
+                odim_io.write_deterministic_to_file(
+                    PD, _out, determ_output_fname, metadata=asap_meta
+                )
             # Release memory
             _out = None
             deterministic = None
@@ -195,24 +239,40 @@ def run(timestamp=None, config=None, **kwargs):
     if run_options.get("run_ensemble"):
         if output_options.get("write_leadtimes_separately", False):
             # Run forecast without saving it here, saving through callback function
-            log("debug", "Callback was requested, will skip saving regardless of settings")
-            nowcaster(observations, motion_field, PD["run_options"]["leadtimes"],
-                         **nowcast_kwargs)
+            log(
+                "debug",
+                "Callback was requested, will skip saving regardless of settings",
+            )
+            nowcaster(
+                observations,
+                motion_field,
+                PD["run_options"]["leadtimes"],
+                **nowcast_kwargs,
+            )
             ensemble_forecast = None
             ens_meta = dict()
             PD["ensemble_size"] = None
         else:
-            ensemble_forecast, ens_meta = generate(observations, motion_field, nowcaster,
-                                                nowcast_kwargs, metadata=obs_metadata)
+            ensemble_forecast, ens_meta = generate(
+                observations,
+                motion_field,
+                nowcaster,
+                nowcast_kwargs,
+                metadata=obs_metadata,
+            )
             PD["ensemble_size"] = ensemble_forecast.shape[0]
-        
-            if output_options.get("store_ensemble", False) and output_options.get("write_asap", False):
+
+            if output_options.get("store_ensemble", False) and output_options.get(
+                "write_asap", False
+            ):
                 log("info", "write_asap requested, writing ensemble nowcast now...")
                 _out, _out_meta = prepare_data_for_writing(ensemble_forecast)
                 asap_meta["scale_meta"] = _out_meta
                 asap_meta["startdate"] = startdate
                 asap_meta["unit"] = ens_meta["unit"]
-                odim_io.write_ensemble_to_file(PD, _out, ensemble_output_fname, metadata=asap_meta)
+                odim_io.write_ensemble_to_file(
+                    PD, _out, ensemble_output_fname, metadata=asap_meta
+                )
                 # Release memory
                 _out = None
                 ensemble_forecast = None
@@ -246,6 +306,7 @@ def run(timestamp=None, config=None, **kwargs):
         "projection": projection_meta,
         "time_at_start": time_at_start,
         "time_at_end": time_at_end,
+        "startdate": startdate,
     }
 
     # FIXME: temporary hack to prevent crashes during saving the output
@@ -265,30 +326,48 @@ def run(timestamp=None, config=None, **kwargs):
             motion_meta = {
                 "projection": projection_meta,
             }
-            odim_io.write_motion_to_file(PD, motion_field, motion_output_fname, metadata=motion_meta)
-        if output_options.get("store_ensemble") and not output_options.get("write_leadtimes_separately"):
-            odim_io.write_ensemble_to_file(PD, ensemble_forecast, ensemble_output_fname, metadata=store_meta)
+            odim_io.write_motion_to_file(
+                PD, motion_field, motion_output_fname, metadata=motion_meta
+            )
+        if output_options.get("store_ensemble") and not output_options.get(
+            "write_leadtimes_separately"
+        ):
+            ensemble_forecast, ens_scale_meta = prepare_data_for_writing(
+                ensemble_forecast
+            )
+            store_meta["scale_meta"] = ens_scale_meta
+            odim_io.write_ensemble_to_file(
+                PD, ensemble_forecast, ensemble_output_fname, metadata=store_meta
+            )
         if output_options.get("store_deterministic"):
-            odim_io.write_deterministic_to_file(PD, deterministic, determ_output_fname, metadata=store_meta)
+            deterministic, det_scale_meta = prepare_data_for_writing(deterministic)
+            store_meta["scale_meta"] = det_scale_meta
+            odim_io.write_deterministic_to_file(
+                PD, deterministic, determ_output_fname, metadata=store_meta
+            )
         if output_options.get("store_perturbed_motion"):
             pass
 
     log("info", "Finished writing output to a file.")
     log("info", "Run complete. Exiting.")
-    
-def initialise_logging(log_folder='./', log_fname='ppn.log'):
+
+
+def initialise_logging(log_folder="./", log_fname="ppn.log"):
     """Wrapper for ppn_logger.config_logging() method. Does nothing if writing
     to log is not enabled."""
     if PD["logging"]["write_log"]:
         full_path = Path(log_folder).expanduser().resolve()
-        ppn_logger.config_logging(full_path / log_fname,
-                                  level=PD["logging"]["log_level"])
+        ppn_logger.config_logging(
+            full_path / log_fname, level=PD["logging"]["log_level"]
+        )
+
 
 def log(level, msg, *args, **kwargs):
     """Wrapper for ppn_logger. Function does nothing if writing to log is
     not enabled."""
     if PD["logging"]["write_log"]:
         ppn_logger.write_to_log(level, msg, *args, **kwargs)
+
 
 def importer_method(module="pysteps", **kwargs):
     """Wrapper for easily switching between modules which provide data importer
@@ -309,6 +388,7 @@ def importer_method(module="pysteps", **kwargs):
 
     raise ValueError("Unknown module {} for importer method".format(module))
 
+
 def optflow_method(module="pysteps", **kwargs):
     """Wrapper for easily switching between modules which provide optical flow
     methods.
@@ -328,6 +408,7 @@ def optflow_method(module="pysteps", **kwargs):
 
     raise ValueError("Unknown module {} for optical flow method".format(module))
 
+
 def nowcast_method(module="pysteps", **kwargs):
     """Wrapper for easily switching between modules which provide nowcasting
     methods.
@@ -342,10 +423,13 @@ def nowcast_method(module="pysteps", **kwargs):
     Raise ValueError for invalid `module` selectors.
     """
     if module == "pysteps":
-        return pysteps.nowcasts.get_method(PD["run_options"]["nowcast_method"], **kwargs)
+        return pysteps.nowcasts.get_method(
+            PD["run_options"]["nowcast_method"], **kwargs
+        )
     # Add more options here
 
     raise ValueError("Unknown module {} for nowcast method".format(module))
+
 
 def deterministic_method(module="pysteps", **kwargs):
     """Wrapper for easily switching between modules which provide deterministic
@@ -361,16 +445,23 @@ def deterministic_method(module="pysteps", **kwargs):
     Raise ValueError for invalid `module` selectors.
     """
     if module == "pysteps":
-        return pysteps.nowcasts.get_method(PD["run_options"]["deterministic_method"], **kwargs)
+        return pysteps.nowcasts.get_method(
+            PD["run_options"]["deterministic_method"], **kwargs
+        )
     # Add more options here
 
     raise ValueError("Unknown module {} for deterministic method".format(module))
 
-def generate_pysteps_setup():
+
+def generate_pysteps_setup(method="steps"):
     """Generate `nowcast_kwargs` objects that are suitable
     for using in pysteps nowcasting methods."""
     # kwargs for nowcasting method
     nowcast_kwargs = PD.get("nowcast_options")
+
+    # Get options for this model specifically
+    nowcast_kwargs.update(nowcast_kwargs.get("method_specific_options").get(method))
+    nowcast_kwargs.pop("method_specific_options", None)
 
     # This threshold is used in masking and probability masking
     # rrate units need to be transformed to decibel, so that comparisons can be done
@@ -384,17 +475,27 @@ def generate_pysteps_setup():
     zr_a = PD["data_options"]["zr_a"]
     zr_b = PD["data_options"]["zr_b"]
 
+    dbr_thr = None
     if utils.quantity_is_dbzh(input_qty) and utils.quantity_is_rate(fct_qty):
-        r_thr = (r_thr / zr_a) ** (1. / zr_b)
-        nowcast_kwargs["R_thr"] = max(10.0 * np.log10(r_thr), 0)  #
+        # Transform threshold, given in dBZ, to rain rate
+        r_thr = (10 ** (r_thr / 10.0) / zr_a) ** (1.0 / zr_b)
+        # Convert to dBR and dont allow negative values
+        dbr_thr = max(10.0 * np.log10(r_thr), 0)
         log("info", 'Converted RATE rain_threshold to decibel units ("dBR").')
     elif utils.quantity_is_rate(input_qty) and utils.quantity_is_dbzh(fct_qty):
-        r_thr = zr_a * r_thr ** zr_b
-        nowcast_kwargs["R_thr"] = r_thr
-    else:
-        nowcast_kwargs["R_thr"] = r_thr
+        # Transform threshold, given in rain rate, to dBZ
+        r_thr = 10 * np.log10(zr_a * r_thr ** zr_b)
 
     PD["converted_rain_thr"] = r_thr  # DBZH or non-decibel RATE is used in thresholding
+
+    if method == "steps":
+        # STEPS-specific options derived from other configurations
+        # Threshold for masking
+        nowcast_kwargs["precip_thr"] = dbr_thr if dbr_thr is not None else r_thr
+    elif method == "linda":
+        # LINDA-specific options derived from other configurations
+        # Threshold for masking
+        pass
 
     if PD["output_options"].get("write_leadtimes_separately", False):
         nowcast_kwargs["callback"] = cb_nowcast
@@ -403,16 +504,19 @@ def generate_pysteps_setup():
 
     return nowcast_kwargs
 
+
 def get_filelist(startdate, datasource):
     """Get a list of input file names"""
     try:
-        filelist = pysteps.io.find_by_date(startdate,
-                                           datasource["root_path"],
-                                           datasource["path_fmt"],
-                                           datasource["fn_pattern"],
-                                           datasource["fn_ext"],
-                                           datasource["timestep"],
-                                           num_prev_files=PD["run_options"]["num_prev_observations"])
+        filelist = pysteps.io.find_by_date(
+            startdate,
+            datasource["root_path"],
+            datasource["path_fmt"],
+            datasource["fn_pattern"],
+            datasource["fn_ext"],
+            datasource["timestep"],
+            num_prev_files=PD["run_options"]["num_prev_observations"],
+        )
     except OSError as pysteps_error:
         error_msg = "Failed to read input data!"
         log("error", f"OSError was raised: {error_msg}")
@@ -420,14 +524,15 @@ def get_filelist(startdate, datasource):
         raise OSError(error_msg) from pysteps_error
     return filelist
 
+
 def read_observations(filelist, datasource, importer):
     """Read observations from archives using pysteps methods. Also threshold
     the input data and (optionally) convert dBZ -> dBR based on configuration
     parameters."""
     # PGM files contain dBZ values
-    obs, _, metadata = pysteps.io.readers.read_timeseries(filelist,
-                                                          importer,
-                                                          **datasource["importer_kwargs"])
+    obs, _, metadata = pysteps.io.readers.read_timeseries(
+        filelist, importer, **datasource["importer_kwargs"]
+    )
 
     input_qty = PD["input_quantity"]
     fct_qty = PD["run_options"].get("forecast_as_quantity", input_qty)
@@ -437,21 +542,30 @@ def read_observations(filelist, datasource, importer):
     elif utils.quantity_is_rate(input_qty) and utils.quantity_is_dbzh(fct_qty):
         obs, metadata = rrate_to_dbz(obs, metadata)
 
-    obs, metadata = thresholding(obs, metadata, threshold=PD["converted_rain_thr"],
-                                 norain_value=PD["run_options"]["steps_set_no_rain_to_value"])
+    obs, metadata = thresholding(
+        obs,
+        metadata,
+        threshold=PD["converted_rain_thr"],
+        norain_value=PD["run_options"]["steps_set_no_rain_to_value"],
+    )
 
-    if utils.quantity_is_rate(fct_qty):
+    if utils.quantity_is_rate(fct_qty) and PD["run_options"]["transform_to_dBR"]:
         obs, metadata = transform_to_decibels(obs, metadata)
 
     return obs, metadata
 
+
 def dbz_to_rrate(data, metadata):
-    return pysteps.utils.conversion.to_rainrate(data, metadata, PD["data_options"]["zr_a"],
-                                                PD["data_options"]["zr_b"])
+    return pysteps.utils.conversion.to_rainrate(
+        data, metadata, PD["data_options"]["zr_a"], PD["data_options"]["zr_b"]
+    )
+
 
 def rrate_to_dbz(data, metadata):
-    return pysteps.utils.conversion.to_reflectivity(data, metadata, PD["data_options"]["zr_a"],
-                                                    PD["data_options"]["zr_b"])
+    return pysteps.utils.conversion.to_reflectivity(
+        data, metadata, PD["data_options"]["zr_a"], PD["data_options"]["zr_b"]
+    )
+
 
 def transform_to_decibels(data, metadata, inverse=False):
     """Transform data to decibel units. Assumes thresholded data.
@@ -485,9 +599,9 @@ def transform_to_decibels(data, metadata, inverse=False):
 
     return data, metadata
 
+
 def thresholding(data, metadata, threshold, norain_value, fill_nan=True):
-    """Set values under 'threshold' to 'norain_value'. Optionally replace np.nan with 'norain_value'.
-    """
+    """Set values under 'threshold' to 'norain_value'. Optionally replace np.nan with 'norain_value'."""
     if fill_nan:
         data[~np.isfinite(data)] = norain_value
     data[data < threshold] = norain_value
@@ -497,10 +611,12 @@ def thresholding(data, metadata, threshold, norain_value, fill_nan=True):
 
     return data, metadata
 
+
 def generate(observations, motion_field, nowcaster, nowcast_kwargs, metadata=None):
     """Generate ensemble nowcast using pysteps nowcaster."""
-    forecast = nowcaster(observations, motion_field, PD["run_options"]["leadtimes"],
-                         **nowcast_kwargs)
+    forecast = nowcaster(
+        observations, motion_field, PD["run_options"]["leadtimes"], **nowcast_kwargs
+    )
 
     if (metadata["unit"] == "mm/h") and (metadata["transform"] == "dB"):
         forecast, meta = transform_to_decibels(forecast, metadata, inverse=True)
@@ -536,12 +652,18 @@ def generate(observations, motion_field, nowcaster, nowcast_kwargs, metadata=Non
     rain_threshold = PD["out_rain_threshold"]
     norain_for_output = PD["out_norain_value"]
 
-    forecast, meta = thresholding(forecast, meta, threshold=rain_threshold,
-                                  norain_value=norain_for_output, fill_nan=False)
+    forecast, meta = thresholding(
+        forecast,
+        meta,
+        threshold=rain_threshold,
+        norain_value=norain_for_output,
+        fill_nan=False,
+    )
 
     if meta is None:
         meta = dict()
     return forecast, meta
+
 
 def _convert_for_output(value, out_qty):
     zr_a = PD["data_options"]["zr_a"]
@@ -558,7 +680,7 @@ def _convert_for_output(value, out_qty):
         # Z = 10 ** (dBZ / 10)
         value = 10 ** (value / 10)
         # R = (Z / zr_a) ** (1.0 / zr_b)
-        value = (value / zr_a) ** (1. / zr_b)
+        value = (value / zr_a) ** (1.0 / zr_b)
 
     elif utils.quantity_is_rate(in_qty) and utils.quantity_is_dbzh(out_qty):
         # Z = zr_a * R ** zr_b
@@ -568,15 +690,19 @@ def _convert_for_output(value, out_qty):
 
     return value
 
-def generate_deterministic(observations, motion_field, nowcaster, nowcast_kwargs=None,
-                           metadata=None):
-    """Generate a deterministic nowcast using semilagrangian extrapolation"""
+
+def generate_deterministic(
+    observations, motion_field, nowcaster, nowcast_kwargs=None, metadata=None
+):
+    """Generate a deterministic nowcast"""
     # Extrapolation scheme doesn't use the same nowcast_kwargs as steps
     if nowcast_kwargs is None:
         nowcast_kwargs = dict()
-    forecast, meta = generate(observations, motion_field, nowcaster, nowcast_kwargs,
-                              metadata)
+    forecast, meta = generate(
+        observations, motion_field, nowcaster, nowcast_kwargs, metadata
+    )
     return forecast, meta
+
 
 def regenerate_ensemble_motion(motion_field, nowcast_kwargs):
     """Generate motion perturbations the same way as pysteps.nowcasts.steps function.
@@ -584,7 +710,7 @@ def regenerate_ensemble_motion(motion_field, nowcast_kwargs):
     This is a workaround for obtaining perturbed motion fields from steps
     calculations, as pysteps doesn't currently give them as output. (2019-09-02)
     """
-    pixelsperkm = 1./nowcast_kwargs["kmperpixel"]
+    pixelsperkm = 1.0 / nowcast_kwargs["kmperpixel"]
     timestep = nowcast_kwargs["timestep"]
     pert_params = nowcast_kwargs["vel_pert_kwargs"]
 
@@ -606,26 +732,33 @@ def regenerate_ensemble_motion(motion_field, nowcast_kwargs):
 
     ensemble_motions = []
     for i, random_state in enumerate(randgen_motion):
-        init_perturbations = pysteps.noise.motion.initialize_bps(motion_field,
-                                                                 pixelsperkm,
-                                                                 timestep,
-                                                                 p_par=pert_params["p_par"],
-                                                                 p_perp=pert_params["p_perp"],
-                                                                 randstate=random_state)
-        perturbations = pysteps.noise.motion.generate_bps(init_perturbations, timestep*(i+1))
+        init_perturbations = pysteps.noise.motion.initialize_bps(
+            motion_field,
+            pixelsperkm,
+            timestep,
+            p_par=pert_params["p_par"],
+            p_perp=pert_params["p_perp"],
+            randstate=random_state,
+        )
+        perturbations = pysteps.noise.motion.generate_bps(
+            init_perturbations, timestep * (i + 1)
+        )
         perturbed = motion_field + perturbations
         ensemble_motions.append(perturbed)
 
     return ensemble_motions
 
+
 def prepare_data_for_writing(forecast):
     """Convert and scale ensemble and deterministic forecast data to uint16 type"""
     # Actual method moved to utils.py
-    return utils.prepare_data_for_writing(forecast,
-                                          options=PD["output_options"],
-                                          forecast_undetect=PD["out_norain_value"],
+    return utils.prepare_data_for_writing(
+        forecast,
+        options=PD["output_options"],
+        forecast_undetect=PD["out_norain_value"],
+        forecast_nodata=None,
+    )
 
-                                          forecast_nodata=None)
 
 def get_timesteps():
     """Return the nowcast timestep if it is regular"""
@@ -634,50 +767,58 @@ def get_timesteps():
 
 
 def write_deterministic_separate_odim_output(field, metadata, store_meta):
-    """Write deterministic forecast single dataset per file.
-    """
+    """Write deterministic forecast single dataset per file."""
 
     folder = PD["callback_options"]["tmp_folder"]
-    
-    for i in range(field.shape[0]):
-        timestep=PD["run_options"]["nowcast_timestep"]
-        timestamp = (PD["startdate"] + (i+1) * dt.timedelta(minutes=timestep)).strftime('%Y%m%d%H%M')
-        fname = f"{PD['startdate']:%Y%m%d%H%M}_{timestamp}_nclen={(i+1)*timestep:03}min_radar.fmippn.det_conf={PD['config']}.h5"
-        with h5py.File(folder.joinpath(fname), 'w') as f:
-            write_odim_output_separately(f, i, field[i,:,:], metadata, store_meta, fc_type="det")
 
+    for i in range(field.shape[0]):
+        timestep = PD["run_options"]["nowcast_timestep"]
+        timestamp = (
+            PD["startdate"] + (i + 1) * dt.timedelta(minutes=timestep)
+        ).strftime("%Y%m%d%H%M")
+        fname = f"{PD['startdate']:%Y%m%d%H%M}_{timestamp}_nclen={(i+1)*timestep:03}min_radar.fmippn.det_conf={PD['config']}.h5"
+        with h5py.File(folder.joinpath(fname), "w") as f:
+            write_odim_output_separately(
+                f, i, field[i, :, :], metadata, store_meta, fc_type="det"
+            )
 
 
 def cb_nowcast(field):
-    """Callback function for pysteps.                                             
+    """Callback function for pysteps.
     Store calculated fields to their own hdf5 files.
     """
     # Count calls from pysteps, used for calculating the timestamp.
     n_timestep = cb_nowcast.counter
     cb_nowcast.counter += 1
-    
-    timestep=PD["run_options"]["nowcast_timestep"]
-    timestamp = (PD["startdate"] + cb_nowcast.counter * dt.timedelta(minutes=timestep)).strftime('%Y%m%d%H%M')
+
+    timestep = PD["run_options"]["nowcast_timestep"]
+    timestamp = (
+        PD["startdate"] + cb_nowcast.counter * dt.timedelta(minutes=timestep)
+    ).strftime("%Y%m%d%H%M")
     folder = PD["callback_options"]["tmp_folder"]
 
     # Process data to wanted output format
     field, metadata, store_meta = process_callback_output(field)
-    
+
     # Store each ensemble member separately
     for i in range(field.shape[0]):
-        member=i+1
+        member = i + 1
         fname = f"{PD['startdate']:%Y%m%d%H%M}_{timestamp}_nclen={cb_nowcast.counter*timestep:03}min_radar.fmippn.ens_conf={PD['config']}_ensmem={member}.h5"
-        with h5py.File(folder.joinpath(fname), 'w') as f:
+        with h5py.File(folder.joinpath(fname), "w") as f:
 
-            write_odim_output_separately(f, n_timestep, field[i,:,:], metadata, store_meta, fc_type="ens")
-            
-            
-# Initialize callback function counter                                                                                                    
+            write_odim_output_separately(
+                f, n_timestep, field[i, :, :], metadata, store_meta, fc_type="ens"
+            )
+
+
+# Initialize callback function counter
 cb_nowcast.counter = 0
 
 
-def write_odim_output_separately(f, n_timestep, n_field, metadata, store_meta, fc_type=False):
-    """    Write single dataset per ODIM HDF5 file.
+def write_odim_output_separately(
+    f, n_timestep, n_field, metadata, store_meta, fc_type=False
+):
+    """Write single dataset per ODIM HDF5 file.
 
     Input:
         f -- h5py file object
@@ -685,36 +826,53 @@ def write_odim_output_separately(f, n_timestep, n_field, metadata, store_meta, f
         n_field -- leadtime field
         metadata -- dictionary containing nowcast metadata
         store_meta -- dictionary containing output metadata (gain, offset etc.)
-    
+
     """
-    
+
     # Copy /how, /what and /where groups from input data
-    utils.copy_odim_attributes(PD["odim_metadata"],f)
-    
+    utils.copy_odim_attributes(PD["odim_metadata"], f)
+
     # Create /dataset1 group and store attributes
-    dset_grp=f.create_group("/dataset1")
-    utils.store_odim_dset_attrs(dset_grp, n_timestep, PD["startdate"], PD["run_options"]["nowcast_timestep"])
+    dset_grp = f.create_group("/dataset1")
+    utils.store_odim_dset_attrs(
+        dset_grp, n_timestep, PD["startdate"], PD["run_options"]["nowcast_timestep"]
+    )
 
     # Create /dataset1/data1 group and store dataset and attributes
-    data_grp=dset_grp.create_group("data1")
-    data_grp.create_dataset("data",data=n_field)
-
+    data_grp = dset_grp.create_group("data1")
+    ds = data_grp.create_dataset("data", data=n_field)
+    # Add attributes to dataset to display as image in hdfview
+    ds.attrs["CLASS"] = np.string_("IMAGE")
+    ds.attrs["IMAGE_VERSION"] = np.string_("1.2")
     # Store attributes in /dataset1/data1/what (offset, gain, nodata, undetect etc)
     utils.store_odim_data_what_attrs(data_grp, metadata, store_meta)
-            
-    #Store PPN specific metadata into /how group
-    how_grp=f["/how"]
+
+    # Store PPN specific metadata into /how group
+    how_grp = f["/how"]
     how_grp.attrs["zr_a"] = PD["data_options"]["zr_a"]
     how_grp.attrs["zr_b"] = PD["data_options"]["zr_b"]
     how_grp.attrs["num_timesteps"] = PD["run_options"]["leadtimes"]
     how_grp.attrs["nowcast_timestep"] = PD["run_options"]["nowcast_timestep"]
     how_grp.attrs["max_leadtime"] = PD["run_options"]["max_leadtime"]
 
-    #Store ensemble forecast specific metadata
+    # Write model specific metadata into /how group
+    if PD["run_options"]["nowcast_method"] == "steps":
+        how_grp.attrs["ensemble_nowcast_method"] = "steps"
+        how_grp.attrs["domain"] = PD["nowcast_options"]["domain"]
+        how_grp.attrs["n_cascade_levels"] = PD["nowcast_options"]["n_cascade_levels"]
+    elif PD["run_options"]["nowcast_method"] == "linda":
+        how_grp.attrs["ensemble_nowcast_method"] = "linda"
+        how_grp.attrs["feature_method"] = PD["nowcast_options"]["feature_method"]
+        how_grp.attrs["ari_order"] = str(PD["nowcast_options"]["ari_order"])
+        how_grp.attrs["max_num_features"] = str(
+            PD["nowcast_options"]["max_num_features"]
+        )
+
+    # Store ensemble forecast specific metadata
     if fc_type == "ens":
         how_grp.attrs["ensemble_size"] = PD["nowcast_options"]["n_ens_members"]
         how_grp.attrs["seed"] = PD["nowcast_options"]["seed"]
-    
+
 
 def process_callback_output(forecast):
     """
@@ -722,8 +880,8 @@ def process_callback_output(forecast):
     """
 
     # Get metadata from PD_callback global dictionary
-    metadata = PD_callback['obs_metadata']
-    
+    metadata = PD_callback["obs_metadata"]
+
     if (metadata["unit"] == "mm/h") and (metadata["transform"] == "dB"):
         forecast, meta = transform_to_decibels(forecast, metadata, inverse=True)
     else:
@@ -738,7 +896,7 @@ def process_callback_output(forecast):
 
     elif utils.quantity_is_rate(out_qty) and metadata["unit"] == "dBZ":
         forecast, meta = dbz_to_rrate(forecast, meta)
-            # Might need to convert the norain value and threshold, too                        
+        # Might need to convert the norain value and threshold, too
     if "out_rain_threshold" not in PD:
         _rain_threshold = PD["data_options"].get("rain_threshold")
         PD["out_rain_threshold"] = _convert_for_output(_rain_threshold, out_qty)
@@ -753,12 +911,17 @@ def process_callback_output(forecast):
 
     rain_threshold = PD["out_rain_threshold"]
     norain_for_output = PD["out_norain_value"]
-    
-    forecast, meta = thresholding(forecast, meta, threshold=rain_threshold,
-                                  norain_value=norain_for_output, fill_nan=False)
+
+    forecast, meta = thresholding(
+        forecast,
+        meta,
+        threshold=rain_threshold,
+        norain_value=norain_for_output,
+        fill_nan=False,
+    )
 
     forecast, store_meta = prepare_data_for_writing(forecast)
-    
+
     if meta is None:
         meta = dict()
     return forecast, meta, store_meta
@@ -795,15 +958,17 @@ def write_to_file(startdate, gen_output, nc_fname, metadata=None):
     ensemble_forecast, ens_scale_meta = prepare_data_for_writing(ensemble_forecast)
     deterministic, det_scale_meta = prepare_data_for_writing(deterministic)
 
-    with h5py.File(output_options["path"].joinpath(nc_fname), 'w') as outf:
+    with h5py.File(output_options["path"].joinpath(nc_fname), "w") as outf:
         if ensemble_forecast is not None and output_options["store_ensemble"]:
             for eidx in range(PD["ensemble_size"]):
                 ens_grp = outf.create_group("member-{:0>2}".format(eidx))
-                utils.store_timeseries(ens_grp,
-                                       ensemble_forecast[eidx, :, :, :],
-                                       startdate,
-                                       timestep=nowcast_timestep,
-                                       metadata=ens_scale_meta)
+                utils.store_timeseries(
+                    ens_grp,
+                    ensemble_forecast[eidx, :, :, :],
+                    startdate,
+                    timestep=nowcast_timestep,
+                    metadata=ens_scale_meta,
+                )
 
         if ensemble_motion is not None and output_options["store_perturbed_motion"]:
             for eidx in range(PD["ensemble_size"]):
@@ -811,23 +976,35 @@ def write_to_file(startdate, gen_output, nc_fname, metadata=None):
                     ens_grp = outf["member-{:0>2}".format(eidx)]
                 except KeyError:
                     ens_grp = outf.create_group("member-{:0>2}".format(eidx))
-                ens_grp.create_dataset("motion", data=ensemble_motion[eidx])
+                ds = ens_grp.create_dataset("motion", data=ensemble_motion[eidx])
+                # Add attributes to dataset to display as image in hdfview
+                ds.attrs["CLASS"] = np.string_("IMAGE")
+                ds.attrs["IMAGE_VERSION"] = np.string_("1.2")
 
         if deterministic is not None and output_options["store_deterministic"]:
             det_grp = outf.create_group("deterministic")
-            utils.store_timeseries(det_grp, deterministic, startdate,
-                                   timestep=nowcast_timestep,
-                                   metadata=det_scale_meta)
+            utils.store_timeseries(
+                det_grp,
+                deterministic,
+                startdate,
+                timestep=nowcast_timestep,
+                metadata=det_scale_meta,
+            )
 
         if output_options["store_motion"]:
-            outf.create_dataset("motion", data=motion_field)
+            ds = outf.create_dataset("motion", data=motion_field)
+            # Add attributes to dataset to display as image in hdfview
+            ds.attrs["CLASS"] = np.string_("IMAGE")
+            ds.attrs["IMAGE_VERSION"] = np.string_("1.2")
 
         meta = outf.create_group("meta")
         # configuration "OUTPUT_TIME_FORMAT" is removed, new output uses ODIM standard
-        meta.attrs["nowcast_started"] = dt.datetime.strftime(metadata["time_at_start"],
-                                                             "%Y-%m-%d %H:%M:%S")
-        meta.attrs["nowcast_ended"] = dt.datetime.strftime(metadata["time_at_end"],
-                                                           "%Y-%m-%d %H:%M:%S")
+        meta.attrs["nowcast_started"] = dt.datetime.strftime(
+            metadata["time_at_start"], "%Y-%m-%d %H:%M:%S"
+        )
+        meta.attrs["nowcast_ended"] = dt.datetime.strftime(
+            metadata["time_at_end"], "%Y-%m-%d %H:%M:%S"
+        )
         meta.attrs["nowcast_units"] = metadata.get("unit", "Unknown")
         meta.attrs["nowcast_seed"] = metadata.get("seed", "Unknown")
         meta.attrs["nowcast_init_time"] = dt.datetime.strftime(startdate, "%Y%m%d%H%M")
@@ -835,8 +1012,10 @@ def write_to_file(startdate, gen_output, nc_fname, metadata=None):
         # Old configurations - may be used by postprocessing scripts
         old_style_configs = {
             # Method selections
-            #"DOMAIN": "fmi", # postprocessing defines this instead of reading it here
-            "VALUE_DOMAIN": "rrate" if PD["run_options"]["forecast_as_quantity"] == "RATE" else "dbz",  # Unused?
+            # "DOMAIN": "fmi", # postprocessing defines this instead of reading it here
+            "VALUE_DOMAIN": "rrate"
+            if PD["run_options"]["forecast_as_quantity"] == "RATE"
+            else "dbz",  # Unused?
             # Z-R conversion parameters
             "ZR_A": PD["data_options"]["zr_a"],  #
             "ZR_B": PD["data_options"]["zr_b"],  #
@@ -867,6 +1046,6 @@ def write_to_file(startdate, gen_output, nc_fname, metadata=None):
 
     return None
 
-        
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     run(test=True)

@@ -3,21 +3,26 @@ import datetime as dt
 import numpy as np
 import h5py
 
+
 def pack_value(original_value, scale_factor, add_offset):
     # scale_factor == gain, add_offset == offset
     packed = (original_value - add_offset) / scale_factor
     return packed
+
 
 def unpack_value(packed_value, scale_factor, add_offset):
     # scale_factor == gain == 1./scaler, add_offset == offset == scale_zero
     original = scale_factor * packed_value + add_offset
     return original
 
+
 def quantity_is_dbzh(quantity):
     return quantity in {"DBZH", "dbz"}
 
+
 def quantity_is_rate(quantity):
     return quantity in {"RATE", "rrate"}
+
 
 def utcnow_floored(increment=5):
     """Return UTC time with minutes replaced by latest multiple of `increment`."""
@@ -50,7 +55,10 @@ def store_timeseries(grp, data, startdate, timestep, metadata=None):
         for key, value in metadata.items():
             tmp.attrs[key] = value
 
-def prepare_data_for_writing(forecast, options, forecast_undetect=None, forecast_nodata=None):
+
+def prepare_data_for_writing(
+    forecast, options, forecast_undetect=None, forecast_nodata=None
+):
     """Scale and convert nowcast data to correct datatype.
 
     The data will be scaled according to equation
@@ -71,21 +79,23 @@ def prepare_data_for_writing(forecast, options, forecast_undetect=None, forecast
 
     # Store data in other datatype format to save space (e.g. float64 -> uint16)
     # If no dtype is given, then default to not converting
-    store_dtype = options.get('convert_to_dtype', None)
+    store_dtype = options.get("convert_to_dtype", None)
     store_dtype = np.dtype(store_dtype) if store_dtype is not None else forecast.dtype
 
-    gain = options.get('gain', None)
+    gain = options.get("gain", None)
     if gain is None and options.get("scaler", 0) != 0:
-        gain = 1./options["scaler"]
+        gain = 1.0 / options["scaler"]
 
-    scale_zero = options.get('offset') if 'offset' in options else options.get("scale_zero")
+    scale_zero = (
+        options.get("offset") if "offset" in options else options.get("scale_zero")
+    )
     if scale_zero in {None, "auto"}:
         scale_zero = np.nanmin(forecast)
 
     if forecast_nodata is not None:
         store_nodata_value = forecast_nodata
     else:
-        cfg_nodata = options.get('set_nodata_value_to', "default")
+        cfg_nodata = options.get("set_nodata_value_to", "default")
         store_nodata_value = _get_default_nodata(store_dtype, cfg_nodata)
 
     # Undetect value from input is used in thresholding the data, so let's store that if provided
@@ -93,7 +103,7 @@ def prepare_data_for_writing(forecast, options, forecast_undetect=None, forecast
     if forecast_undetect is not None:
         undetect = pack_value(forecast_undetect, gain, scale_zero)
     else:
-        undetect = options.get('set_undetect_value_to')
+        undetect = options.get("set_undetect_value_to")
 
     # TODO: Take actual forecast_nodata value into account here, if provided
     nodata_mask = ~np.isfinite(forecast)
@@ -101,12 +111,12 @@ def prepare_data_for_writing(forecast, options, forecast_undetect=None, forecast
     fct_scaled[nodata_mask] = store_nodata_value
 
     # Tuuli added masking and filling undetect value:
-    undetect_mask = (fct_scaled == undetect)
-    fct_scaled[undetect_mask] = options.get('set_undetect_value_to')
-    undetect = options.get('set_undetect_value_to')
+    undetect_mask = fct_scaled == undetect
+    fct_scaled[undetect_mask] = options.get("set_undetect_value_to")
+    undetect = options.get("set_undetect_value_to")
 
     prepared_forecast = fct_scaled.astype(store_dtype)
-    
+
     metadata = {
         "nodata": store_nodata_value,
         "gain": gain,
@@ -116,6 +126,7 @@ def prepare_data_for_writing(forecast, options, forecast_undetect=None, forecast
 
     return prepared_forecast, metadata
 
+
 def _get_default_nodata(store_dtype, cfg_nodata):
     if isinstance(cfg_nodata, (int, float)):
         return cfg_nodata
@@ -124,7 +135,7 @@ def _get_default_nodata(store_dtype, cfg_nodata):
     default_values = {
         "u": "max_int",  # unsigned int -> maximum value is safer than 0
         "i": "min_int",  # signed int -> minimum value is safer choice than maximum
-        "f": "nan"       # float -> nan is available as a special value
+        "f": "nan",  # float -> nan is available as a special value
     }
 
     if cfg_nodata == "default":
@@ -141,9 +152,12 @@ def _get_default_nodata(store_dtype, cfg_nodata):
         return np.nan
 
     # For unknown or invalid options, raise
-    msg = ("Invalid nodata value '{}'. It must be one of following: an integer, a float, 'default',"
-           " 'max_int', 'min_int', or 'nan'.".format(cfg_nodata))
+    msg = (
+        "Invalid nodata value '{}'. It must be one of following: an integer, a float, 'default',"
+        " 'max_int', 'min_int', or 'nan'.".format(cfg_nodata)
+    )
     raise TypeError(msg)
+
 
 def get_odim_attrs_from_input(infile):
     """Read attribute groups /what, /where and /how from input ODIM HDF5 file.
@@ -154,7 +168,7 @@ def get_odim_attrs_from_input(infile):
     Output:
         A dictionary with dictionaries 'what', 'where' and 'how' containing the attributes.
     """
-    with h5py.File(infile, 'r') as f:
+    with h5py.File(infile, "r") as f:
         what = dict(f["what"].attrs)
         where = dict(f["where"].attrs)
         how = dict(f["how"].attrs)
@@ -165,7 +179,8 @@ def get_odim_attrs_from_input(infile):
         "how": how,
     }
 
-def get_odim_data_undetect(fname, quantity='DBZH'):
+
+def get_odim_data_undetect(fname, quantity="DBZH"):
     """
 
     Input:
@@ -181,16 +196,17 @@ def get_odim_data_undetect(fname, quantity='DBZH'):
     # This assumes that there is only one 'dataset/data' group containing the wanted quantity
     # TODO: Generalize if there can be more groups with the same quantity
     attrs_list = []
+
     def _append_attrs(name, obj):
         """Append attribute dictionary to attrs_list (this abuses a SIDE EFFECT!)"""
-        if 'quantity' in obj.attrs:
+        if "quantity" in obj.attrs:
             attrs_list.append(dict(obj.attrs))
         return None
 
     # h5py.visititems goes through the file recursively
     # it needs a callable with two arguments (name, obj)
     # See h5py documentation for more
-    with h5py.File(fname, 'r') as f:
+    with h5py.File(fname, "r") as f:
         f.visititems(_append_attrs)
 
     # h5py<=2.10 can store variable-length strings in attrs as bytes,
@@ -198,18 +214,22 @@ def get_odim_data_undetect(fname, quantity='DBZH'):
     # ODIM format specifies that they should be bytes, however not every file
     quantity_as_bytes = quantity.encode()
     for attrs in attrs_list:
-        if attrs.get('quantity', b'') in {quantity_as_bytes, quantity}:
-            und = attrs.get('undetect', None)
+        if attrs.get("quantity", b"") in {quantity_as_bytes, quantity}:
+            und = attrs.get("undetect", None)
             if und is None:
-                raise RuntimeError(f"'undetect' attribute is missing from {quantity} data attributes!")
-            gain = attrs.get('gain', 1.0)
-            offset = attrs.get('offset', 0.0)
+                raise RuntimeError(
+                    f"'undetect' attribute is missing from {quantity} data attributes!"
+                )
+            gain = attrs.get("gain", 1.0)
+            offset = attrs.get("offset", 0.0)
             return unpack_value(und, gain, offset)
 
-    raise RuntimeError(f"Could not find 'undetect' value for {quantity} in file {fname}")
+    raise RuntimeError(
+        f"Could not find 'undetect' value for {quantity} in file {fname}"
+    )
 
 
-def copy_odim_attributes(odim_metadata,outf):
+def copy_odim_attributes(odim_metadata, outf):
     """Copy attribute groups /what, /where and /how from
     input ODIM HDF5 file to output ODIM HDF5 file as they are.
 
@@ -219,19 +239,18 @@ def copy_odim_attributes(odim_metadata,outf):
     outf -- FMI-PPN output HDF5 file object
     """
 
-    #Copy attribute groups /what, /where and /how
-    what=outf.create_group("what")
+    # Copy attribute groups /what, /where and /how
+    what = outf.create_group("what")
     for key, val in odim_metadata["what"].items():
         what.attrs[key] = val
 
-    where=outf.create_group("where")
+    where = outf.create_group("where")
     for key, val in odim_metadata["where"].items():
         where.attrs[key] = val
 
-    how=outf.create_group("how")
+    how = outf.create_group("how")
     for key, val in odim_metadata["how"].items():
         how.attrs[key] = val
-
 
 
 def store_odim_dset_attrs(dset_grp, dset_index, startdate, timestep):
@@ -245,21 +264,21 @@ def store_odim_dset_attrs(dset_grp, dset_index, startdate, timestep):
     timestep -- time difference between nowcast fields (int)
     """
 
-    #Calculate valid time for each step
+    # Calculate valid time for each step
     valid_time = startdate + (dset_index + 1) * dt.timedelta(minutes=timestep)
 
-    #Add attributes to each dataset
-    dset_how_grp=dset_grp.create_group("how")
-    dset_how_grp.attrs["simulated"]="True"
+    # Add attributes to each dataset
+    dset_how_grp = dset_grp.create_group("how")
+    dset_how_grp.attrs["simulated"] = "True"
 
-    dset_what_grp=dset_grp.create_group("what")
+    dset_what_grp = dset_grp.create_group("what")
     dset_what_grp.attrs["startdate"] = int(dt.datetime.strftime(valid_time, "%Y%m%d"))
     dset_what_grp.attrs["enddate"] = int(dt.datetime.strftime(valid_time, "%Y%m%d"))
     dset_what_grp.attrs["starttime"] = int(dt.datetime.strftime(valid_time, "%H%M%S"))
     dset_what_grp.attrs["endtime"] = int(dt.datetime.strftime(valid_time, "%H%M%S"))
 
 
-def store_odim_data_what_attrs(data_grp,metadata,scale_meta):
+def store_odim_data_what_attrs(data_grp, metadata, scale_meta):
     """Store ODIM attributes to data/what group. Each data group (data1, data2 ...)
     represents a different ensemble member.
 
@@ -272,14 +291,14 @@ def store_odim_data_what_attrs(data_grp,metadata,scale_meta):
     # Deduce ODIM format quantity from units
     unit = metadata.get("unit", "Unknown").lower()
     if unit == "dbz":
-        quantity="DBZH"
+        quantity = "DBZH"
     elif unit in {"rrate", "mm/h"}:
-        quantity="RATE"
+        quantity = "RATE"
     else:
         quantity = "Unknown"
 
-    #Create data/what group and store metadata
-    data_what_grp=data_grp.create_group("what")
+    # Create data/what group and store metadata
+    data_what_grp = data_grp.create_group("what")
     data_what_grp.attrs["quantity"] = quantity
     data_what_grp.attrs["gain"] = scale_meta.get("gain")
     data_what_grp.attrs["offset"] = scale_meta.get("offset")

@@ -32,8 +32,10 @@ def get_config(override_name=None):
     if override_name is not None:
         override_params = get_params(override_name)
         if not override_params:
-            no_config_found_msg = ("Couldn't find overriding parameters in "
-                                   "ppn_config. Key '{}' was unrecognised.").format(override_name)
+            no_config_found_msg = (
+                "Couldn't find overriding parameters in "
+                "ppn_config. Key '{}' was unrecognised."
+            ).format(override_name)
             raise ValueError(no_config_found_msg)
         for key, group in override_params.items():
             try:
@@ -41,7 +43,7 @@ def get_config(override_name=None):
             except KeyError:
                 params[key] = group
             except AttributeError:
-                pass # Ignore keys that are not dictionaries
+                pass  # Ignore keys that are not dictionaries
 
     ### Configuration input checks
     # For convenience
@@ -54,10 +56,15 @@ def get_config(override_name=None):
     _check_leadtime(params)
 
     # PGM-related checks
-    if ("pgm" in data.get("importer", "").lower() and
-            not params["output_options"].get("use_old_format", False)):
-        raise ValueError(("Cannot write ODIM-compliant output when input data is in .pgm format! "
-                         "Set 'output_options.use_old_format' to 'true'."))
+    if "pgm" in data.get("importer", "").lower() and not params["output_options"].get(
+        "use_old_format", False
+    ):
+        raise ValueError(
+            (
+                "Cannot write ODIM-compliant output when input data is in .pgm format! "
+                "Set 'output_options.use_old_format' to 'true'."
+            )
+        )
 
     # Nowcast-method specific input checks
     # TODO: Add checks for other pysteps nowcast methods
@@ -75,29 +82,47 @@ def get_config(override_name=None):
             ).format(d, n)
             raise ValueError(error_msg_timestep_conflict)
         # kmperpixel check
-        if ncopt.get("kmperpixel", None) is None and ncopt.get("vel_pert_method") in {"bps"}:
+        if ncopt.get("kmperpixel", None) is None and ncopt.get("vel_pert_method") in {
+            "bps"
+        }:
             raise ValueError("Configuration error: kmperpixel is required")
 
     # Expand ~ in paths, if any
-    params["data_source"]["root_path"] = Path(params["data_source"]["root_path"]).expanduser()
-    params["output_options"]["path"] = Path(params["output_options"]["path"]).expanduser()
+    params["data_source"]["root_path"] = Path(
+        params["data_source"]["root_path"]
+    ).expanduser()
+    params["output_options"]["path"] = Path(
+        params["output_options"]["path"]
+    ).expanduser()
     params["logging"]["log_folder"] = Path(params["logging"]["log_folder"]).expanduser()
-    params["callback_options"]["tmp_folder"] = Path(params["callback_options"]["tmp_folder"]).expanduser()
+    params["callback_options"]["tmp_folder"] = Path(
+        params["callback_options"]["tmp_folder"]
+    ).expanduser()
 
     # Resolve relative paths, if any
-    params["callback_options"]["tmp_folder"] = params["output_options"]["path"].joinpath(
-        params["callback_options"]["tmp_folder"]
-    )
+    params["callback_options"]["tmp_folder"] = params["output_options"][
+        "path"
+    ].joinpath(params["callback_options"]["tmp_folder"])
 
     return params
+
 
 def _check_datasource(ds):
     """Check config file for errors in data_source definition"""
     if not isinstance(ds, dict):
-        raise ValueError("Configuration error: mandatory option group 'data_source' is missing!")
+        raise ValueError(
+            "Configuration error: mandatory option group 'data_source' is missing!"
+        )
 
-    required_keys = ("root_path", "path_fmt", "fn_pattern", "fn_ext", "importer",
-                     "timestep", "importer_kwargs")  # importer_kwargs may be empty
+    required_keys = (
+        "root_path",
+        "path_fmt",
+        "fn_pattern",
+        "fn_ext",
+        "importer",
+        "timestep",
+        "importer_kwargs",
+    )  # importer_kwargs may be empty
     # Go through all keys and display all missing keys
     missing = []
     for key in required_keys:
@@ -105,13 +130,22 @@ def _check_datasource(ds):
         if value is None:
             missing.append(key)
     if missing:
-        raise ValueError("Following required parameters are missing from data_source group: {}".format(missing))
+        raise ValueError(
+            "Following required parameters are missing from data_source group: {}".format(
+                missing
+            )
+        )
     # Type checks
     if not isinstance(ds.get("timestep"), int):
-        raise TypeError("Configuration error in data_sources: timestep must be an integer")
+        raise TypeError(
+            "Configuration error in data_sources: timestep must be an integer"
+        )
     if not isinstance(ds.get("importer_kwargs"), dict):
-        raise TypeError('Configuration error in data_sources: importer_kwargs must be an object '
-                        '({"key": value}). It can be empty.')
+        raise TypeError(
+            "Configuration error in data_sources: importer_kwargs must be an object "
+            '({"key": value}). It can be empty.'
+        )
+
 
 # FIXME: Logic could be simplified
 def _check_leadtime(params):
@@ -125,8 +159,10 @@ def _check_leadtime(params):
     # leadtimes is not given, but timestep and maximum is
     if leadtimes is None:
         if None in (max_leadtime, nowcast_timestep):
-            raise ValueError("Need to set both 'max_leadtime' and 'nowcast_timestep' if 'leadtimes'"
-                             " is not given")
+            raise ValueError(
+                "Need to set both 'max_leadtime' and 'nowcast_timestep' if 'leadtimes'"
+                " is not given"
+            )
         leadtimes = int(max_leadtime / nowcast_timestep)
         runopt["leadtimes"] = leadtimes
 
@@ -136,15 +172,19 @@ def _check_leadtime(params):
         # else generate a list
         if nowcast_timestep is not None and nowcast_timestep != input_timestep:
             # if given as list, "1" in leadtimes means 1*input_timestep minutes (if given as a single number 1 means 1 minute)
-            #runopt["leadtimes"] = [nowcast_timestep + i*nowcast_timestep for i in range(leadtimes)]
-            runopt["leadtimes"] = [nowcast_timestep + i*(nowcast_timestep/input_timestep) for i in range(leadtimes)]
-            
+            # runopt["leadtimes"] = [nowcast_timestep + i*nowcast_timestep for i in range(leadtimes)]
+            runopt["leadtimes"] = [
+                nowcast_timestep + i * (nowcast_timestep / input_timestep)
+                for i in range(leadtimes)
+            ]
+
     # if leadtimes is a list, pass (might need to include a check for valid values within list)
     elif isinstance(leadtimes, (list, tuple)):
         pass
     else:
         raise ValueError("Cannot figure out leadtimes")
     # else raise error?
+
 
 def get_params(name):
     """Utility function for easier access to wanted parametrizations.
@@ -174,13 +214,18 @@ def get_params(name):
         with open(cfname, "r") as f:
             params = json.load(f)
     except FileNotFoundError as exc:
-        file_missing_msg = ("Cannot find requested config '{}'! Are the filename and path correct?"
-                            "\n{}").format(name.stem, cfname)
+        file_missing_msg = (
+            "Cannot find requested config '{}'! Are the filename and path correct?"
+            "\n{}"
+        ).format(name.stem, cfname)
         raise OSError(file_missing_msg) from exc
     except JSONDecodeError as exc:
-        raise RuntimeError("Could not decode config file. Is it valid JSON file?") from exc
+        raise RuntimeError(
+            "Could not decode config file. Is it valid JSON file?"
+        ) from exc
 
     return params
+
 
 def dump_params_to_json(params, config_name):
     """Utility function for dumping the used parametrisations to a new config file.
@@ -194,15 +239,18 @@ def dump_params_to_json(params, config_name):
     with open(f"config/{config_name}.json", "w") as f:
         json.dump(params, f, indent=2)
 
+
 def dump_defaults():
     """Utility function for generating a configuration file with default values.
     Useful for creating new configurations using Python shell."""
     dump_params_to_json(defaults, "defaults")
 
+
 def dump_empty():
     """Utility function for generating an empty configuration file."""
     empty = {key: {} for key in defaults.keys()}
     dump_params_to_json(empty, "empty")
+
 
 # Default parameters for PPN, other dictionaries should override these parameters
 # using dict.update() method.
@@ -213,46 +261,53 @@ defaults = {
         "zr_b": 1.53,
         "rain_threshold": 8,  # In data units
     },
-
-    "data_source": {
-    },
-
+    "data_source": {},
     "logging": {
         "write_log": False,
         "log_level": logging.INFO,
         "log_folder": "/tmp",
     },
-
-    "motion_options": {
-    },
-
+    "motion_options": {},
     "nowcast_options": {
         # Default to the nowcast method defaults
         # n_ens_members = 24,
-        "n_cascade_levels": 6,  # pysteps default for steps
-        "fft_method": "pyfftw",
+        "method_specific_options": {
+            "steps": {
+                "n_cascade_levels": 6,  # pysteps default for STEPS
+                "fft_method": "pyfftw",
+                "domain": "spectral",  # pysteps default
+                "noise_method": "nonparametric",
+                "ar_order": 2,
+                "mask_method": "incremental",
+            },
+            "linda": {
+                "max_num_features": 25,
+                "feature_method": "domain",
+                "feature_kwargs": {},
+                "ari_order": 1,
+                "kernel_type": "anisotropic",
+                "localization_window_radius": None,
+                "errdist_window_radius": None,
+                "acf_window_radius": None,
+                "extrap_kwargs": {},
+                "pert_thrs": (0.5, 1.0),
+            },
+        },
         "vel_pert_method": "bps",  # pysteps default, requires kmperpixel to be set
         "vel_pert_kwargs": {
             # lucaskanade/fmi values given in pysteps.nowcasts.steps.forecast() method documentation
             "p_par": [2.20837526, 0.33887032, -2.48995355],
             "p_perp": [2.21722634, 0.32359621, -2.57402761],
         },
-        "domain": "spectral",  # pysteps default
-
-        "num_workers": 6, # pysteps defaults to 1, we want more.
+        "num_workers": 6,  # pysteps defaults to 1, we want more.
         "seed": None,  # pysteps default
-
         # Previously hardcoded values
         "extrap_method": "semilagrangian",
-        "noise_method": "nonparametric",
-        "ar_order": 2,
-        "mask_method": "incremental",
         # Required parameters that need to be calculated or defined
-        #"kmperpixel": # required for motion perturbation method (bps)
-        #"timestep": # "Timestep" of MOTION VECTOR, get from input data
-        #"R_thr":  # must be in decibel units...
+        # "kmperpixel": # required for motion perturbation method (bps)
+        # "timestep": # "Timestep" of MOTION VECTOR, get from input data
+        # "precip_thr":  # must be in decibel units...
     },
-
     "output_options": {
         #
         "path": "/tmp",
@@ -262,26 +317,25 @@ defaults = {
         "store_ensemble": True,
         "store_deterministic": True,
         #
-        "as_quantity": None, # None == same as input. Other valids: DBZH, RATE (see ODIM standard)
+        "as_quantity": None,  # None == same as input. Other valids: DBZH, RATE (see ODIM standard)
         "convert_to_dtype": None,  # None == same as input. Otherwise provide a valid string for numpy.dtype()
-        #"scaler": 10, # Deprecated
-        #"scale_zero": "auto", # Deprecated
+        # "scaler": 10, # Deprecated
+        # "scale_zero": "auto", # Deprecated
         "gain": 0.1,
         "offset": -32,  # "auto" for data minimum
         # "input" values are encoded, numbers given here are not
-        "set_undetect_value_to": "input", # a number or "input". input == read from input (units converted if needed)
+        "set_undetect_value_to": "input",  # a number or "input". input == read from input (units converted if needed)
         "set_nodata_value_to": "default",  # A number, "default", "max_int", "min_int", or "nan" (floats only).
         #
-        "write_leadtimes_separately": False, # Store each leadtime after calculating it instead of everything at the end
+        "write_leadtimes_separately": False,  # Store each leadtime after calculating it instead of everything at the end
         "write_asap": True,
         "use_old_format": False,  # Remove when postprocessing can use ODIM format
     },
-
     "run_options": {
         "leadtimes": 12,  # int = number of timesteps, list of floats = forecast for these lead times
         # if leadtimes is not a list and nowcast_timestep != input timestep, use these to make it into one
-        "nowcast_timestep": None, # optional, default to input timestep
-        "max_leadtime": 60, # optional, used only if "leadtimes" is None
+        "nowcast_timestep": None,  # optional, default to input timestep
+        "max_leadtime": 60,  # optional, used only if "leadtimes" is None
         # What is calculated
         "run_deterministic": True,
         "run_ensemble": True,
@@ -292,21 +346,21 @@ defaults = {
         "motion_method": "lucaskanade",
         "nowcast_method": "steps",
         "deterministic_method": "extrapolation",
-
         #
         "forecast_as_quantity": "DBZH",  # Input data is converted to this before nowcasting
+        "transform_to_dBR": True,  # Convert to decibel rain rate before nowcasting (only used if forecast_as_quantity is RATE)
         "steps_set_no_rain_to_value": -10,  # In forecast quantity units
     },
-
     # Used when writing ensemble nowcasts after each timestep with callback function
     "callback_options": {
         "tmp_folder": "tmp",  # relative to output_options.path (or absolute path)
-    }
+    },
 }
 
 # Test cases
-if __name__ == '__main__':
+if __name__ == "__main__":
     from pprint import pprint
+
     # Test custom parameter updating
     print("Updating default parameters with custom config")
     cfg = get_config("test/customised")
