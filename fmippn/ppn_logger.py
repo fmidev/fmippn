@@ -5,12 +5,13 @@ import logging
 _logger = None
 
 _logger_severity = {
-    'critical': logging.CRITICAL,
-    'debug': logging.DEBUG,
-    'error': logging.ERROR,
-    'info': logging.INFO,
-    'warning': logging.WARNING,
+    "critical": logging.CRITICAL,
+    "debug": logging.DEBUG,
+    "error": logging.ERROR,
+    "info": logging.INFO,
+    "warning": logging.WARNING,
 }
+
 
 def config_logging(fname, level=logging.INFO, datefmt="%Y-%m-%d %H:%M:%S"):
     """Setup logger object using logging.basicConfig.
@@ -22,8 +23,7 @@ def config_logging(fname, level=logging.INFO, datefmt="%Y-%m-%d %H:%M:%S"):
     """
     global _logger
     formatter = logging.Formatter(
-        fmt="%(asctime)s (%(name)s) %(levelname)s: %(message)s",
-        datefmt=datefmt
+        fmt="%(asctime)s (%(name)s) %(levelname)s: %(message)s", datefmt=datefmt
     )
     handler = logging.FileHandler(fname)
     handler.setFormatter(formatter)
@@ -31,13 +31,16 @@ def config_logging(fname, level=logging.INFO, datefmt="%Y-%m-%d %H:%M:%S"):
     _logger.addHandler(handler)
     _logger.setLevel(level)
 
+
 def write_to_log(level, msg, *args, **kwargs):
     """Write `msg` at logging level `level` to log.
     args and kwargs are passed to logging functions.
     """
     if _logger is None:
-        raise RuntimeError("Tried to write to log before logging was configured! "
-                           "Call 'configure_logging' first.")
+        raise RuntimeError(
+            "Tried to write to log before logging was configured! "
+            "Call 'configure_logging' first."
+        )
     lvl = level.lower()
     severity = _logger_severity.get(lvl)
     if severity is None:

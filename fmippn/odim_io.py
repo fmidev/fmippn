@@ -2,11 +2,15 @@
 import os
 
 import h5py
+import numpy as np
 
 import utils
 from ppn_config import defaults
 
-def write_deterministic_to_file(configuration, nowcast_data, filename=None, metadata=None):
+
+def write_deterministic_to_file(
+    configuration, nowcast_data, filename=None, metadata=None
+):
     """Write deterministic output in ODIM HDF5 format..
 
     Input:
@@ -15,7 +19,7 @@ def write_deterministic_to_file(configuration, nowcast_data, filename=None, meta
         filename -- filename for output deterministic HDF5 file
         metadata -- dictionary containing nowcast metadata (optional)
     """
-    #Output filename
+    # Output filename
     if filename is None:
         filename = os.path.join(defaults["output_options"]["path"], "deterministic.h5")
 
@@ -31,11 +35,11 @@ def write_ensemble_to_file(configuration, nowcast_data, filename=None, metadata=
         filename -- filename for output ensemble HDF5 file
         metadata -- dictionary containing nowcast metadata (optional)
     """
-    #Output filename
+    # Output filename
     if filename is None:
         filename = os.path.join(defaults["output_options"]["path"], "ensemble.h5")
 
-    _write(nowcast_data, filename, metadata,configuration=configuration,  optype="ens")
+    _write(nowcast_data, filename, metadata, configuration=configuration, optype="ens")
 
 
 def write_motion_to_file(configuration, motion_data, filename=None, metadata=None):
@@ -47,11 +51,12 @@ def write_motion_to_file(configuration, motion_data, filename=None, metadata=Non
         filename -- filename for output motion HDF5 file
         metadata -- dictionary containing nowcast metadata (optional)
     """
-    #Output filename
+    # Output filename
     if filename is None:
         filename = os.path.join(defaults["output_options"]["path"], "motion.h5")
 
-    _write(motion_data, filename, metadata,configuration=configuration,  optype="mot")
+    _write(motion_data, filename, metadata, configuration=configuration, optype="mot")
+
 
 # FIXME: This logic should be converted to use a list of leadtimes instead of assuming regular timestep
 def get_timesteps(configuration):
@@ -61,6 +66,7 @@ def get_timesteps(configuration):
     if ts is None:
         return configuration["data_source"]["timestep"]
     return ts
+
 
 def _convert_motion_units(data_pxts, kmperpixel=1.0, timestep=1.0):
     """Convert atmospheric motion vectors from pixel/timestep units to m/s.
@@ -112,13 +118,11 @@ def _write(data, filename, metadata, configuration, optype=None):
             raise ValueError("missing startdate information from metadata dictionary")
 
     # Conversion of motion vector units from pixel/timestep -> m/s
-    if optype == 'mot':
+    if optype == "mot":
         motion_timestep = configuration["data_source"].get("timestep")
         motion_pixelsize = configuration.get("nowcast_options").get("kmperpixel")
         data = _convert_motion_units(
-            data_pxts=data,
-            kmperpixel=motion_pixelsize,
-            timestep=motion_timestep
+            data_pxts=data, kmperpixel=motion_pixelsize, timestep=motion_timestep
         )
 
     # Remove things that break HDF5 output from metadata dictionary
@@ -129,16 +133,15 @@ def _write(data, filename, metadata, configuration, optype=None):
     if "seed" in metadata and metadata["seed"] is None:
         del metadata["seed"]
 
-    with h5py.File(filename, 'w') as outf:
+    with h5py.File(filename, "w") as outf:
         # Initialize output file
         # Copy attribute groups /what, /where and /how from input to output
         utils.copy_odim_attributes(configuration["odim_metadata"], outf)
 
         # Common groups
         how_grp = outf["how"]
-        how_grp.attrs["domain"] = configuration["nowcast_options"]["domain"]
 
-        #Write AMVU and AMVV datasets and add attributes
+        # Write AMVU and AMVV datasets and add attributes
         if optype == "mot":
             AMVU = data[0]
             AMVV = data[1]
@@ -146,11 +149,14 @@ def _write(data, filename, metadata, configuration, optype=None):
             how_attrs = {
                 "input_interval": 60 * motion_timestep,
                 "kmperpixel": motion_pixelsize,
-                "units": "m/s,"
+                "units": "m/s,",
             }
 
             amvu_grp = outf.create_group("/dataset1/data1")
-            amvu_grp.create_dataset("data", data=AMVU)
+            ds = amvu_grp.create_dataset("data", data=AMVU)
+            # Add attributes to dataset to display as image in hdfview
+            ds.attrs["CLASS"] = np.string_("IMAGE")
+            ds.attrs["IMAGE_VERSION"] = np.string_("1.2")
             amvu_what_grp = amvu_grp.create_group("what")
             amvu_what_grp.attrs["quantity"] = "AMVU"
             amvu_how_grp = amvu_grp.create_group("how")
@@ -158,30 +164,38 @@ def _write(data, filename, metadata, configuration, optype=None):
                 amvu_how_grp.attrs[key] = value
 
             amvv_grp = outf.create_group("/dataset1/data2")
-            amvv_grp.create_dataset("data", data=AMVV)
+            ds = amvv_grp.create_dataset("data", data=AMVV)
+            # Add attributes to dataset to display as image in hdfview
+            ds.attrs["CLASS"] = np.string_("IMAGE")
+            ds.attrs["IMAGE_VERSION"] = np.string_("1.2")
             amvv_what_grp = amvv_grp.create_group("what")
             amvv_what_grp.attrs["quantity"] = "AMVV"
             amvv_how_grp = amvv_grp.create_group("how")
             for key, value in how_attrs.items():
                 amvv_how_grp.attrs[key] = value
 
-        #Write deterministic forecast timeseries in ODIM format
+        # Write deterministic forecast timeseries in ODIM format
         elif optype == "det":
             for index in range(data.shape[0]):
-                dset_grp=outf.create_group(f"/dataset{index+1}")
+                dset_grp = outf.create_group(f"/dataset{index+1}")
 
-                #Add attributes to each dataset
-                utils.store_odim_dset_attrs(dset_grp, index, startdate, nowcast_timestep)
+                # Add attributes to each dataset
+                utils.store_odim_dset_attrs(
+                    dset_grp, index, startdate, nowcast_timestep
+                )
 
-                #Store data
+                # Store data
                 ts_point = data[index, :, :]
-                data_grp=dset_grp.create_group("data1")
-                data_grp.create_dataset("data",data=ts_point)
+                data_grp = dset_grp.create_group("data1")
+                ds = data_grp.create_dataset("data", data=ts_point)
+                # Add attributes to dataset to display as image in hdfview
+                ds.attrs["CLASS"] = np.string_("IMAGE")
+                ds.attrs["IMAGE_VERSION"] = np.string_("1.2")
 
-                #Store data/what group attributes
+                # Store data/what group attributes
                 utils.store_odim_data_what_attrs(data_grp, metadata, scale_meta)
 
-            #Store PPN specific metadata into /how group
+            # Store PPN specific metadata into /how group
             how_grp.attrs["zr_a"] = configuration["data_options"]["zr_a"]
             how_grp.attrs["zr_b"] = configuration["data_options"]["zr_b"]
             # FIXME: "leadtimes" can be a list (irregular timesteps) -> take that into account
@@ -189,44 +203,61 @@ def _write(data, filename, metadata, configuration, optype=None):
             # FIXME: "nowcast_timestep" might not be constants, see above
             how_grp.attrs["nowcast_timestep"] = nowcast_timestep
             how_grp.attrs["max_leadtime"] = configuration["run_options"]["max_leadtime"]
-            default_cascade_levels = defaults["nowcast_options"]["n_cascade_levels"]
-            how_grp.attrs["n_cascade_levels"] = configuration["nowcast_options"].get("n_cascade_levels",
-                                                                                     default_cascade_levels)
 
-        #Write ensemble forecast timeseries in ODIM format
+        # Write ensemble forecast timeseries in ODIM format
         elif optype == "ens":
             for index in range(data.shape[1]):
-                dset_grp=outf.create_group(f"/dataset{index+1}")
+                dset_grp = outf.create_group(f"/dataset{index+1}")
 
-                #Add attributes to each dataset
-                utils.store_odim_dset_attrs(dset_grp, index, startdate, nowcast_timestep)
+                # Add attributes to each dataset
+                utils.store_odim_dset_attrs(
+                    dset_grp, index, startdate, nowcast_timestep
+                )
 
                 # Store ensemble members
                 for eidx in range(configuration["ensemble_size"]):
 
-                    #Store data
+                    # Store data
                     ts_point = data[eidx, index, :, :]
-                    data_grp=dset_grp.create_group(f"data{eidx+1}")
-                    data_grp.create_dataset("data",data=ts_point)
+                    data_grp = dset_grp.create_group(f"data{eidx+1}")
+                    ds = data_grp.create_dataset("data", data=ts_point)
+                    # Add attributes to dataset to display as image in hdfview
+                    ds.attrs["CLASS"] = np.string_("IMAGE")
+                    ds.attrs["IMAGE_VERSION"] = np.string_("1.2")
 
-                    #Store data/what group attributes
+                    # Store data/what group attributes
                     utils.store_odim_data_what_attrs(data_grp, metadata, scale_meta)
 
-            #Store PPN specific metadata into /how group
+            # Store PPN specific metadata into /how group
             how_grp.attrs["zr_a"] = configuration["data_options"]["zr_a"]
             how_grp.attrs["zr_b"] = configuration["data_options"]["zr_b"]
-            how_grp.attrs["seed"] = metadata.get("seed","Unknown")
+            how_grp.attrs["seed"] = metadata.get("seed", "Unknown")
             how_grp.attrs["ensemble_size"] = configuration["ensemble_size"]
             # FIXME: "leadtimes" can be a list (irregular timesteps) -> take that into account
             how_grp.attrs["num_timesteps"] = configuration["run_options"]["leadtimes"]
             # FIXME: "nowcast_timestep" might not be constants, see above
             how_grp.attrs["nowcast_timestep"] = nowcast_timestep
             how_grp.attrs["max_leadtime"] = configuration["run_options"]["max_leadtime"]
-            default_cascade_levels = defaults["nowcast_options"]["n_cascade_levels"]
-            how_grp.attrs["n_cascade_levels"] = configuration["nowcast_options"].get("n_cascade_levels",
-                                                                                     default_cascade_levels)
+
+        if optype in ["det", "ens"]:
+            # Write model specific metadata into /how group
+            if configuration["run_options"]["nowcast_method"] == "steps":
+                how_grp.attrs["ensemble_nowcast_method"] = "steps"
+                how_grp.attrs["domain"] = configuration["nowcast_options"]["domain"]
+                default_cascade_levels = defaults["nowcast_options"]["n_cascade_levels"]
+                how_grp.attrs["n_cascade_levels"] = configuration[
+                    "nowcast_options"
+                ].get("n_cascade_levels", default_cascade_levels)
+            elif configuration["run_options"]["nowcast_method"] == "linda":
+                how_grp.attrs["ensemble_nowcast_method"] = "linda"
+                how_grp.attrs["feature_method"] = configuration["nowcast_options"][
+                    "feature_method"
+                ]
+                how_grp.attrs["ari_order"] = str(
+                    configuration["nowcast_options"]["ari_order"]
+                )
+                how_grp.attrs["max_num_features"] = str(
+                    configuration["nowcast_options"]["max_num_features"]
+                )
 
     return None
-
-
-

@@ -7,8 +7,10 @@ dependencies:
   - git
   - numpy
   - scipy
+  - scikit-image
+  - opencv
   - h5py
   - pillow
-  - pysteps=1.4
+  - pysteps=1.7
   - dask
   - pyfftw
