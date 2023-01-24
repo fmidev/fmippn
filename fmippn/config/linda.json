@@ -14,7 +14,7 @@
   "data_options": {
     "zr_a": 223,
     "zr_b": 1.53,
-    "rain_threshold": -10
+    "rain_threshold": 8
   },
   "motion_options": {},
   "nowcast_options": {
