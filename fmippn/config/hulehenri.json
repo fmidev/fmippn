@@ -1,8 +1,8 @@
 {
   "data_source": {
     "root_path": "/input",
-    "path_fmt": "",
-    "fn_pattern": "%Y%m%d%H%M_radar.rack.comp_CONF=HULEHENRI,ANDRE",
+    "path_fmt": "%Y/%m/%d/radar/rack/comp",
+    "fn_pattern": "%Y%m%d%H%M_radar.rack.comp_CONF=HULEHENRI",
     "fn_ext": "h5",
     "importer": "opera_hdf5",
     "timestep": 5,
@@ -11,64 +11,88 @@
       "qty": "DBZH"
     }
   },
-  "motion_options": {},
   "data_options": {
-    "zr_a": 223.0,
+    "zr_a": 223,
     "zr_b": 1.53,
     "rain_threshold": -10
   },
+  "motion_options": {},
+  "nowcast_options": {
+    "method_specific_options": {
+      "steps": {
+        "n_cascade_levels": 8,
+        "fft_method": "pyfftw",
+        "domain": "spectral",
+        "noise_method": "nonparametric",
+        "ar_order": 2,
+        "mask_method": "incremental"
+      },
+      "linda": {
+        "max_num_features": 25,
+        "feature_method": "domain",
+        "feature_kwargs": {},
+        "ari_order": 1,
+        "kernel_type": "anisotropic",
+        "localization_window_radius": null,
+        "errdist_window_radius": null,
+        "acf_window_radius": null,
+        "extrap_kwargs": {},
+        "pert_thrs": [
+          0.5,
+          1.0
+        ]
+      }
+    },
+    "kmperpixel": 0.5,
+    "timestep": 5,
+    "n_ens_members": 20,
+    "num_workers": 20,
+    "vel_pert_method": "bps",
+    "vel_pert_kwargs": {
+      "p_par": [
+        2.20837526,
+        0.33887032,
+        -2.48995355
+      ],
+      "p_perp": [
+        2.21722634,
+        0.32359621,
+        -2.57402761
+      ]
+    },
+    "seed": null,
+    "extrap_method": "semilagrangian"
+  },
   "output_options": {
-    "as_quantity": "DBZH",
-    "store_ensemble": false,
-    "store_deterministic": true,
+    "path": "/output",
     "store_motion": true,
     "store_perturbed_motion": false,
-    "use_old_format": false,
-    "path": "/output",
+    "store_ensemble": true,
+    "store_deterministic": true,
+    "as_quantity": "DBZH",
     "convert_to_dtype": "uint16",
     "gain": 0.01,
     "offset": -327.68,
     "set_undetect_value_to": 0,
     "set_nodata_value_to": 65535,
     "write_leadtimes_separately": true,
-    "write_asap": true
+    "write_asap": true,
+    "use_old_format": false
   },
   "run_options": {
     "leadtimes": null,
     "nowcast_timestep": 1,
-    "num_prev_observations": 3,
     "max_leadtime": 240,
     "run_deterministic": true,
     "run_ensemble": false,
     "regenerate_perturbed_motion": false,
+    "num_prev_observations": 3,
     "motion_method": "lucaskanade",
-    "nowcast_method": "steps",
-    "deterministic_method": "extrapolation",
-    "forecast_as_quantity": "DBZH",
+    "nowcast_method": "linda",
+    "deterministic_method": "linda",
+    "forecast_as_quantity": "RATE",
+    "transform_to_dBR": false,
     "steps_set_no_rain_to_value": -16
-  },
-  "nowcast_options": {
-    "kmperpixel": 0.5,
-    "timestep": 5,
-    "fft_method": "pyfftw",
-    "n_ens_members": 20,
-    "n_cascade_levels": 8,
-    "num_workers": 20,
-    "domain": "spectral",
-    "vel_pert_method": "bps",
-    "vel_pert_kwargs": {
-      "p_par": [
-        0,
-        0,
-        0
-      ],
-      "p_perp": [
-        0,
-        0,
-        0
-      ]
-    },
-    "seed": null
   },
   "callback_options": {
     "tmp_folder": ""

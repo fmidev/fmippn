@@ -53,7 +53,7 @@
     "fft_method": "pyfftw",
     "n_ens_members": 15,
     "n_cascade_levels": 8,
-    "num_workers": 15,
+    "num_workers": 19,
     "domain": "spectral",
     "vel_pert_method": "bps",
     "vel_pert_kwargs": {
