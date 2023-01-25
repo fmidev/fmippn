@@ -1,8 +1,8 @@
 {
   "data_source": {
     "root_path": "/input",
-    "path_fmt": "",
-    "fn_pattern": "%Y%m%d%H%M_radar.rack.comp_CONF=FMIPPN-SMALL,ANDRE",
+    "path_fmt": "%Y/%m/%d/input_composites",
+    "fn_pattern": "%Y%m%d%H%M_radar.rack.comp_CONF=HULEHENRI,ANDRE",
     "fn_ext": "h5",
     "importer": "opera_hdf5",
     "timestep": 5,
@@ -19,9 +19,9 @@
   },
   "output_options": {
     "as_quantity": "DBZH",
-    "store_ensemble": true,
-    "store_deterministic": false,
-    "store_motion": false,
+    "store_ensemble": false,
+    "store_deterministic": true,
+    "store_motion": true,
     "store_perturbed_motion": false,
     "use_old_format": false,
     "path": "/output",
@@ -35,11 +35,11 @@
   },
   "run_options": {
     "leadtimes": null,
-    "nowcast_timestep": 5,
+    "nowcast_timestep": 1,
     "num_prev_observations": 3,
     "max_leadtime": 240,
-    "run_deterministic": false,
-    "run_ensemble": true,
+    "run_deterministic": true,
+    "run_ensemble": false,
     "regenerate_perturbed_motion": false,
     "motion_method": "lucaskanade",
     "nowcast_method": "steps",
@@ -48,12 +48,12 @@
     "steps_set_no_rain_to_value": -16
   },
   "nowcast_options": {
-    "kmperpixel": 1.0,
+    "kmperpixel": 0.5,
     "timestep": 5,
     "fft_method": "pyfftw",
-    "n_ens_members": 15,
+    "n_ens_members": 20,
     "n_cascade_levels": 8,
-    "num_workers": 15,
+    "num_workers": 20,
     "domain": "spectral",
     "vel_pert_method": "bps",
     "vel_pert_kwargs": {
