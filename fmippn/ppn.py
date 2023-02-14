@@ -196,6 +196,7 @@ def run(timestamp=None, config=None, **kwargs):
             det_nowcast_kwargs["add_perturbations"] = False
             det_nowcast_kwargs["return_output"] = True
             det_nowcast_kwargs["callback"] = None
+            det_nowcast_kwargs["n_ens_members"] = 1
             # LINDA needs the last ari_order+2 observations
             deterministic, det_meta = generate_deterministic(
                 observations[-(nowcast_kwargs["ari_order"] + 2) :],
@@ -614,7 +615,7 @@ def thresholding(data, metadata, threshold, norain_value, fill_nan=True):
 
 def generate(observations, motion_field, nowcaster, nowcast_kwargs, metadata=None):
     """Generate ensemble nowcast using pysteps nowcaster."""
-    forecast = nowcaster(
+    forecast, *_ = nowcaster(
         observations, motion_field, PD["run_options"]["leadtimes"], **nowcast_kwargs
     )
 
