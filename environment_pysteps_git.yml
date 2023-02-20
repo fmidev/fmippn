@@ -1,0 +1,21 @@
+name: ppn
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python>=3.7
+  - git
+  - numpy
+  - scipy
+  - scikit-image
+  - opencv
+  - h5py
+  - pillow
+  - dask
+  - pyfftw
+  - ipdb
+  - pip
+  - pyproj
+  - jsonschema
+  - pip:
+      - git+https://github.com/pySTEPS/pysteps@linda-refactoring
