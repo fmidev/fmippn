@@ -615,9 +615,13 @@ def thresholding(data, metadata, threshold, norain_value, fill_nan=True):
 
 def generate(observations, motion_field, nowcaster, nowcast_kwargs, metadata=None):
     """Generate ensemble nowcast using pysteps nowcaster."""
-    forecast, *_ = nowcaster(
+    output = nowcaster(
         observations, motion_field, PD["run_options"]["leadtimes"], **nowcast_kwargs
     )
+    if PD["nowcast_options"].get("measure_time", False):
+        forecast, *_ = output
+    else:
+        forecast = output
 
     if (metadata["unit"] == "mm/h") and (metadata["transform"] == "dB"):
         forecast, meta = transform_to_decibels(forecast, metadata, inverse=True)
