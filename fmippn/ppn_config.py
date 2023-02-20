@@ -174,8 +174,7 @@ def _check_leadtime(params):
             # if given as list, "1" in leadtimes means 1*input_timestep minutes (if given as a single number 1 means 1 minute)
             # runopt["leadtimes"] = [nowcast_timestep + i*nowcast_timestep for i in range(leadtimes)]
             runopt["leadtimes"] = [
-                nowcast_timestep + i * (nowcast_timestep / input_timestep)
-                for i in range(leadtimes)
+                i * (nowcast_timestep / input_timestep) for i in range(1, leadtimes + 1)
             ]
 
     # if leadtimes is a list, pass (might need to include a check for valid values within list)
