@@ -1,7 +1,7 @@
 FROM ubuntu:20.04
 
 # Install GL libraries
-RUN apt-get -qq update && apt-get -qq -y install libgl1-mesa-glx build-essential gcc
+RUN apt-get -qq update && apt-get -qq -y install libgl1-mesa-glx
 
 # Install conda
 RUN apt-get -qq update && apt-get -qq -y install curl bzip2 \
@@ -23,10 +23,9 @@ RUN conda init bash
 WORKDIR .
 RUN mkdir input output log
 
-ARG env_file=environment_pysteps_git.yml
 # Create conda environment
-COPY $env_file .
-RUN conda env create -f ${env_file} -n fmippn
+COPY environment.yml .
+RUN conda env create -f environment.yml -n fmippn
 RUN echo "conda activate fmippn" >> ~/.profile
 
 # Copy fmippn directory
