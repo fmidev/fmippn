@@ -1,0 +1,106 @@
+{
+  "data_source": {
+    "root_path": "/input",
+    "path_fmt": "%Y/%m/%d/radar/rack/comp",
+    "fn_pattern": "%Y%m%d%H%M_radar.rack.comp_CONF=HULEHENRI",
+    "fn_ext": "h5",
+    "importer": "opera_hdf5",
+    "timestep": 5,
+    "importer_kwargs": {
+      "gzipped": false,
+      "qty": "DBZH"
+    }
+  },
+  "data_options": {
+    "zr_a": 223,
+    "zr_b": 1.53,
+    "rain_threshold": 8
+  },
+  "motion_options": {},
+  "nowcast_options": {
+    "method_specific_options": {
+      "steps": {
+        "n_cascade_levels": 8,
+        "fft_method": "pyfftw",
+        "domain": "spectral",
+        "noise_method": "nonparametric",
+        "ar_order": 2,
+        "mask_method": "incremental"
+      },
+      "linda": {
+        "max_num_features": 25,
+        "feature_method": "domain",
+        "feature_kwargs": {},
+        "ari_order": 1,
+        "kernel_type": "anisotropic",
+        "localization_window_radius": null,
+        "errdist_window_radius": null,
+        "acf_window_radius": null,
+        "extrap_kwargs": {},
+        "pert_thrs": [
+          0.5,
+          1.0
+        ]
+      }
+    },
+    "measure_time": true,
+    "kmperpixel": 0.5,
+    "timestep": 5,
+    "n_ens_members": 10,
+    "num_workers": 20,
+    "vel_pert_method": "bps",
+    "vel_pert_kwargs": {
+      "p_par": [
+        2.20837526,
+        0.33887032,
+        -2.48995355
+      ],
+      "p_perp": [
+        2.21722634,
+        0.32359621,
+        -2.57402761
+      ]
+    },
+    "seed": null,
+    "extrap_method": "semilagrangian"
+  },
+  "output_options": {
+    "path": "/output",
+    "store_motion": true,
+    "store_perturbed_motion": false,
+    "store_ensemble": true,
+    "store_deterministic": true,
+    "as_quantity": "DBZH",
+    "convert_to_dtype": "uint16",
+    "gain": 0.01,
+    "offset": -327.68,
+    "set_undetect_value_to": 0,
+    "set_nodata_value_to": 65535,
+    "write_leadtimes_separately": true,
+    "write_asap": true,
+    "use_old_format": false
+  },
+  "run_options": {
+    "leadtimes": 60,
+    "nowcast_timestep": 1.0,
+    "max_leadtime": 60,
+    "run_deterministic": true,
+    "run_ensemble": false,
+    "regenerate_perturbed_motion": false,
+    "num_prev_observations": 3,
+    "motion_method": "lucaskanade",
+    "nowcast_method": "linda",
+    "deterministic_method": "linda",
+    "forecast_as_quantity": "RATE",
+    "transform_to_dBR": false,
+    "steps_set_no_rain_to_value": 0
+  },
+  "callback_options": {
+    "tmp_folder": ""
+  },
+  "logging": {
+    "write_log": true,
+    "log_level": 10,
+    "log_folder": "/log"
+  }
+}
