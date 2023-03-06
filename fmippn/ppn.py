@@ -58,7 +58,7 @@ def run(timestamp=None, config=None, **kwargs):
     # to get a valid timestamp for the data
     # However, if a timestamp is given, that should be used.
     if timestamp is not None:
-        startdate = dt.datetime.strptime(timestamp, "%Y%m%d%H%M")
+        startdate = dt.datetime.strptime(timestamp, "%Y%m%d%H%M%S")
     else:
         startdate = utils.utcnow_floored(increment=5)
 
@@ -66,8 +66,8 @@ def run(timestamp=None, config=None, **kwargs):
     PD["config"] = config
 
     if nc_fname is None:
-        nc_fname = "nc_{:%Y%m%d%H%M}.h5".format(startdate)
-        nc_fname_templ = "{date:%Y%m%d%H%M}_radar.fmippn.{tag}_conf={config}.h5"
+        nc_fname = "nc_{:%Y%m%d%H%M%S}.h5".format(startdate)
+        nc_fname_templ = "{date:%Y%m%d%H%M%S}_radar.fmippn.{tag}_conf={config}.h5"
 
     # GENERAL SETUP
 
@@ -775,8 +775,8 @@ def write_deterministic_separate_odim_output(field, metadata, store_meta):
         timestep = PD["run_options"]["nowcast_timestep"]
         timestamp = (
             PD["startdate"] + (i + 1) * dt.timedelta(minutes=timestep)
-        ).strftime("%Y%m%d%H%M")
-        fname = f"{PD['startdate']:%Y%m%d%H%M}_{timestamp}_nclen={(i+1)*timestep:03}min_radar.fmippn.det_conf={PD['config']}.h5"
+        ).strftime("%Y%m%d%H%M%S")
+        fname = f"{PD['startdate']:%Y%m%d%H%M%S}_{timestamp}_radar.fmippn.det_conf={PD['config']}.h5"
         with h5py.File(folder.joinpath(fname), "w") as f:
             write_odim_output_separately(
                 f, i, field[i, :, :], metadata, store_meta, fc_type="det"
@@ -794,7 +794,7 @@ def cb_nowcast(field):
     timestep = PD["run_options"]["nowcast_timestep"]
     timestamp = (
         PD["startdate"] + cb_nowcast.counter * dt.timedelta(minutes=timestep)
-    ).strftime("%Y%m%d%H%M")
+    ).strftime("%Y%m%d%H%M%S")
     folder = PD["callback_options"]["tmp_folder"]
 
     # Process data to wanted output format
@@ -803,7 +803,7 @@ def cb_nowcast(field):
     # Store each ensemble member separately
     for i in range(field.shape[0]):
         member = i + 1
-        fname = f"{PD['startdate']:%Y%m%d%H%M}_{timestamp}_nclen={cb_nowcast.counter*timestep:03}min_radar.fmippn.ens_conf={PD['config']}_ensmem={member}.h5"
+        fname = f"{PD['startdate']:%Y%m%d%H%M%S}_{timestamp}_radar.fmippn.ens_conf={PD['config']}_ensmem={member}.h5"
         with h5py.File(folder.joinpath(fname), "w") as f:
 
             write_odim_output_separately(
@@ -1007,7 +1007,7 @@ def write_to_file(startdate, gen_output, nc_fname, metadata=None):
         )
         meta.attrs["nowcast_units"] = metadata.get("unit", "Unknown")
         meta.attrs["nowcast_seed"] = metadata.get("seed", "Unknown")
-        meta.attrs["nowcast_init_time"] = dt.datetime.strftime(startdate, "%Y%m%d%H%M")
+        meta.attrs["nowcast_init_time"] = dt.datetime.strftime(startdate, "%Y%m%d%H%M%S")
 
         # Old configurations - may be used by postprocessing scripts
         old_style_configs = {
