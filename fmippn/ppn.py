@@ -58,7 +58,7 @@ def run(timestamp=None, config=None, **kwargs):
     # to get a valid timestamp for the data
     # However, if a timestamp is given, that should be used.
     if timestamp is not None:
-        startdate = dt.datetime.strptime(timestamp, "%Y%m%d%H%M%S")
+        startdate = dt.datetime.strptime(timestamp, "%Y%m%d%H%M")
     else:
         startdate = utils.utcnow_floored(increment=5)
 
