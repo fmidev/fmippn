@@ -14,7 +14,7 @@
   "data_options": {
     "zr_a": 223,
     "zr_b": 1.53,
-    "rain_threshold": -10
+    "rain_threshold": 8
   },
   "motion_options": {},
   "nowcast_options": {
@@ -43,9 +43,10 @@
         ]
       }
     },
+    "measure_time": true,
     "kmperpixel": 0.5,
     "timestep": 5,
-    "n_ens_members": 20,
+    "n_ens_members": 10,
     "num_workers": 20,
     "vel_pert_method": "bps",
     "vel_pert_kwargs": {
@@ -80,9 +81,9 @@
     "use_old_format": false
   },
   "run_options": {
-    "leadtimes": null,
-    "nowcast_timestep": 1,
-    "max_leadtime": 240,
+    "leadtimes": 60,
+    "nowcast_timestep": 1.0,
+    "max_leadtime": 60,
     "run_deterministic": true,
     "run_ensemble": false,
     "regenerate_perturbed_motion": false,
@@ -92,7 +93,7 @@
     "deterministic_method": "linda",
     "forecast_as_quantity": "RATE",
     "transform_to_dBR": false,
-    "steps_set_no_rain_to_value": -16
+    "steps_set_no_rain_to_value": 0
   },
   "callback_options": {
     "tmp_folder": ""
