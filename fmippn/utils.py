@@ -272,10 +272,10 @@ def store_odim_dset_attrs(dset_grp, dset_index, startdate, timestep):
     dset_how_grp.attrs["simulated"] = "True"
 
     dset_what_grp = dset_grp.create_group("what")
-    dset_what_grp.attrs["startdate"] = int(dt.datetime.strftime(valid_time, "%Y%m%d"))
-    dset_what_grp.attrs["enddate"] = int(dt.datetime.strftime(valid_time, "%Y%m%d"))
-    dset_what_grp.attrs["starttime"] = int(dt.datetime.strftime(valid_time, "%H%M%S"))
-    dset_what_grp.attrs["endtime"] = int(dt.datetime.strftime(valid_time, "%H%M%S"))
+    dset_what_grp.attrs["startdate"] = str(dt.datetime.strftime(valid_time, "%Y%m%d"))
+    dset_what_grp.attrs["enddate"] = str(dt.datetime.strftime(valid_time, "%Y%m%d"))
+    dset_what_grp.attrs["starttime"] = str(dt.datetime.strftime(valid_time, "%H%M%S"))
+    dset_what_grp.attrs["endtime"] = str(dt.datetime.strftime(valid_time, "%H%M%S"))
 
 
 def store_odim_data_what_attrs(data_grp, metadata, scale_meta):

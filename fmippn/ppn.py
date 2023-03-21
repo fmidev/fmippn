@@ -196,6 +196,7 @@ def run(timestamp=None, config=None, **kwargs):
             det_nowcast_kwargs["add_perturbations"] = False
             det_nowcast_kwargs["return_output"] = True
             det_nowcast_kwargs["callback"] = None
+            det_nowcast_kwargs["n_ens_members"] = 1
             # LINDA needs the last ari_order+2 observations
             deterministic, det_meta = generate_deterministic(
                 observations[-(nowcast_kwargs["ari_order"] + 2) :],
@@ -614,9 +615,13 @@ def thresholding(data, metadata, threshold, norain_value, fill_nan=True):
 
 def generate(observations, motion_field, nowcaster, nowcast_kwargs, metadata=None):
     """Generate ensemble nowcast using pysteps nowcaster."""
-    forecast = nowcaster(
+    output = nowcaster(
         observations, motion_field, PD["run_options"]["leadtimes"], **nowcast_kwargs
     )
+    if PD["nowcast_options"].get("measure_time", False):
+        forecast, *_ = output
+    else:
+        forecast = output
 
     if (metadata["unit"] == "mm/h") and (metadata["transform"] == "dB"):
         forecast, meta = transform_to_decibels(forecast, metadata, inverse=True)
@@ -770,12 +775,18 @@ def write_deterministic_separate_odim_output(field, metadata, store_meta):
     """Write deterministic forecast single dataset per file."""
 
     folder = PD["callback_options"]["tmp_folder"]
+    input_timestep = PD["data_source"]["timestep"]
+    leadtimes = PD["run_options"]["leadtimes"]
 
     for i in range(field.shape[0]):
-        timestep = PD["run_options"]["nowcast_timestep"]
-        timestamp = (
-            PD["startdate"] + (i + 1) * dt.timedelta(minutes=timestep)
-        ).strftime("%Y%m%d%H%M%S")
+        # Calculate the timestamp for the current timestep
+        if isinstance(PD["run_options"]["leadtimes"], list):
+            timestep = round(leadtimes[i] * input_timestep)
+        else:
+            timestep = round((i + 1) * input_timestep)
+        timestamp = (PD["startdate"] + dt.timedelta(minutes=timestep)).strftime(
+            "%Y%m%d%H%M%S"
+        )
         fname = f"{PD['startdate']:%Y%m%d%H%M%S}_{timestamp}_radar.fmippn.det_conf={PD['config']}.h5"
         with h5py.File(folder.joinpath(fname), "w") as f:
             write_odim_output_separately(
@@ -791,10 +802,17 @@ def cb_nowcast(field):
     n_timestep = cb_nowcast.counter
     cb_nowcast.counter += 1
 
-    timestep = PD["run_options"]["nowcast_timestep"]
-    timestamp = (
-        PD["startdate"] + cb_nowcast.counter * dt.timedelta(minutes=timestep)
-    ).strftime("%Y%m%d%H%M%S")
+    input_timestep = PD["data_source"]["timestep"]
+    leadtimes = PD["run_options"]["leadtimes"]
+
+    if isinstance(PD["run_options"]["leadtimes"], list):
+        timestep = round(leadtimes[n_timestep] * input_timestep)
+    else:
+        timestep = round((n_timestep + 1) * input_timestep)
+
+    timestamp = (PD["startdate"] + dt.timedelta(minutes=timestep)).strftime(
+        "%Y%m%d%H%M%S"
+    )
     folder = PD["callback_options"]["tmp_folder"]
 
     # Process data to wanted output format
@@ -1007,7 +1025,9 @@ def write_to_file(startdate, gen_output, nc_fname, metadata=None):
         )
         meta.attrs["nowcast_units"] = metadata.get("unit", "Unknown")
         meta.attrs["nowcast_seed"] = metadata.get("seed", "Unknown")
-        meta.attrs["nowcast_init_time"] = dt.datetime.strftime(startdate, "%Y%m%d%H%M%S")
+        meta.attrs["nowcast_init_time"] = dt.datetime.strftime(
+            startdate, "%Y%m%d%H%M%S"
+        )
 
         # Old configurations - may be used by postprocessing scripts
         old_style_configs = {
