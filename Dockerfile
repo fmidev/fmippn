@@ -9,21 +9,14 @@ RUN apt-get -qq update && apt-get -qq -y install curl bzip2 \
     && bash /tmp/miniconda.sh -bfp /usr/local \
     && rm -rf /tmp/miniconda.sh
 
-RUN conda install -y python=3 \
-    && conda update -y conda \
-    && apt-get -qq -y remove curl bzip2 \
-    && apt-get -qq -y autoremove \
-    && apt-get autoclean \
-    && rm -rf /var/lib/apt/lists/* /var/log/dpkg.log \
-    && conda clean --all --yes
+COPY environment.yml .
+RUN conda install -c conda-forge mamba && \
+    mamba env create -f environment.yml -n fmippn && \
+    mamba clean --all -f -y
 
 # Workdir and input/output/log dir
 WORKDIR .
 RUN mkdir input output log
-
-# Create conda environment
-COPY environment.yml .
-RUN conda env create -f environment.yml -n fmippn
 
 # Copy fmippn directory
 COPY fmippn /fmippn
