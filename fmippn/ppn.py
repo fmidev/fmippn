@@ -113,6 +113,10 @@ def run(timestamp=None, config=None, **kwargs):
     # Observation data input
     input_files = get_filelist(startdate, datasource)
 
+    if None in input_files[0]:
+        none_times = [d for i, d in enumerate(input_files[1]) if input_files[0][i] is None]
+        raise FileNotFoundError(f"No input data for {', '.join(str(i) for i in none_times)} at {datasource['root_path']}!")
+
     if datasource["importer"] in {"opera_hdf5", "odim_hdf5"}:
         input_quantity = datasource["importer_kwargs"]["qty"]
         odim_metadata = utils.get_odim_attrs_from_input(
