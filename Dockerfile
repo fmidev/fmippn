@@ -1,7 +1,7 @@
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 
 # Install GL libraries
-RUN apt-get -qq update && apt-get -qq -y install libgl1-mesa-glx
+RUN apt-get -qq update && apt-get -qq -y install libgl1-mesa-glx libegl1-mesa libopengl0
 
 # Install conda
 RUN apt-get -qq update && apt-get -qq -y install curl bzip2 \
