@@ -561,6 +561,7 @@ def read_observations(filelist, datasource, importer):
         metadata,
         threshold=PD["converted_rain_thr"],
         norain_value=PD["run_options"]["steps_set_no_rain_to_value"],
+        fill_nan=PD["run_options"].get("steps_fill_nan", True),
     )
 
     if utils.quantity_is_rate(fct_qty) and PD["run_options"]["transform_to_dBR"]:
