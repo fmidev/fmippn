@@ -22,7 +22,7 @@
     "store_ensemble": true,
     "store_deterministic": false,
     "store_motion": false,
-    "store_perturbed_motion": false,
+    "store_perturbed_motion": true,
     "use_old_format": false,
     "path": "/output",
     "convert_to_dtype": "uint16",
@@ -40,7 +40,7 @@
     "max_leadtime": 240,
     "run_deterministic": false,
     "run_ensemble": true,
-    "regenerate_perturbed_motion": false,
+    "regenerate_perturbed_motion": true,
     "motion_method": "lucaskanade",
     "nowcast_method": "steps",
     "deterministic_method": "extrapolation",
@@ -57,18 +57,10 @@
     "domain": "spectral",
     "vel_pert_method": "bps",
     "vel_pert_kwargs": {
-      "p_par": [
-        0,
-        0,
-        0
-      ],
-      "p_perp": [
-        0,
-        0,
-        0
-      ]
+      "p_par": [0, 0, 0],
+      "p_perp": [0, 0, 0]
     },
-    "seed": null
+    "seed": "random"
   },
   "callback_options": {
     "tmp_folder": ""
