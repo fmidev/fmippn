@@ -113,6 +113,10 @@ def run(timestamp=None, config=None, **kwargs):
     # Observation data input
     input_files = get_filelist(startdate, datasource)
 
+    if None in input_files[0]:
+        none_times = [d for i, d in enumerate(input_files[1]) if input_files[0][i] is None]
+        raise FileNotFoundError(f"No input data for {', '.join(str(i) for i in none_times)} at {datasource['root_path']}!")
+
     if datasource["importer"] in {"opera_hdf5", "odim_hdf5"}:
         input_quantity = datasource["importer_kwargs"]["qty"]
         odim_metadata = utils.get_odim_attrs_from_input(
@@ -175,13 +179,22 @@ def run(timestamp=None, config=None, **kwargs):
     if run_options.get("regenerate_perturbed_motion"):
         if PD["nowcast_options"].get("seed") is None:
             raise ValueError("Cannot regenerate motion field with unknown seed value!")
+        elif PD["nowcast_options"].get("seed") == "random":
+            PD["nowcast_options"]["seed"] = random.randrange(2**32 - 1)
+
         log("info", "Regenerating ensemble motion fields...")
         ensemble_motion = regenerate_ensemble_motion(motion_field, nowcast_kwargs)
         log("info", "Finished regeneration.")
-        if output_options.get("store_perturbed_motion", False) and output_options.get(
-            "write_asap", False
-        ):
-            raise NotImplementedError
+        if output_options.get("store_perturbed_motion", False) and output_options.get("write_asap", False):
+            for ens_member in range(PD["nowcast_options"]["n_ens_members"]):
+                perturb_motion_output_fname = output_options["path"].joinpath(
+                    nc_fname_templ.format(date=startdate, tag=f"motion-ensmem={ens_member+1}", config=config)
+                )
+                odim_io.write_motion_to_file(
+                    PD, ensemble_motion[ens_member], perturb_motion_output_fname, metadata=asap_meta
+                )
+        # Release memory
+        ensemble_motion = None
     else:
         ensemble_motion = None
 
@@ -548,6 +561,7 @@ def read_observations(filelist, datasource, importer):
         metadata,
         threshold=PD["converted_rain_thr"],
         norain_value=PD["run_options"]["steps_set_no_rain_to_value"],
+        fill_nan=PD["run_options"].get("steps_fill_nan", True),
     )
 
     if utils.quantity_is_rate(fct_qty) and PD["run_options"]["transform_to_dBR"]:
