@@ -21,7 +21,7 @@
     "as_quantity": "DBZH",
     "store_ensemble": true,
     "store_deterministic": false,
-    "store_motion": false,
+    "store_motion": true,
     "store_perturbed_motion": true,
     "use_old_format": false,
     "path": "/output",
