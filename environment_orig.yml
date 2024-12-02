@@ -10,8 +10,6 @@ dependencies:
   - opencv
   - h5py
   - pillow
+  - pysteps=1.7.1
   - dask
   - pyfftw
-  - pip
-  - pip:
-    - git+https://github.com/pySTEPS/pysteps.git@opera_fixes
