@@ -12,6 +12,7 @@ dependencies:
   - pillow
   - dask
   - pyfftw
+  - pyproj
   - pip
   - pip:
     - git+https://github.com/pySTEPS/pysteps.git@opera_fixes
