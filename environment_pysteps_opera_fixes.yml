@@ -13,4 +13,5 @@ dependencies:
   - dask
   - pyfftw
   - pip
+  - pip:
     - git+https://github.com/pySTEPS/pysteps.git@opera_fixes
