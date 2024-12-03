@@ -155,8 +155,8 @@ def _write(data, filename, metadata, configuration, optype=None):
             amvu_grp = outf.create_group("/dataset1/data1")
             ds = amvu_grp.create_dataset("data", data=AMVU)
             # Add attributes to dataset to display as image in hdfview
-            ds.attrs["CLASS"] = np.string_("IMAGE")
-            ds.attrs["IMAGE_VERSION"] = np.string_("1.2")
+            ds.attrs["CLASS"] = np.str_("IMAGE")
+            ds.attrs["IMAGE_VERSION"] = np.str_("1.2")
             amvu_what_grp = amvu_grp.create_group("what")
             amvu_what_grp.attrs["quantity"] = "AMVU"
             amvu_how_grp = amvu_grp.create_group("how")
@@ -166,8 +166,8 @@ def _write(data, filename, metadata, configuration, optype=None):
             amvv_grp = outf.create_group("/dataset1/data2")
             ds = amvv_grp.create_dataset("data", data=AMVV)
             # Add attributes to dataset to display as image in hdfview
-            ds.attrs["CLASS"] = np.string_("IMAGE")
-            ds.attrs["IMAGE_VERSION"] = np.string_("1.2")
+            ds.attrs["CLASS"] = np.str_("IMAGE")
+            ds.attrs["IMAGE_VERSION"] = np.str_("1.2")
             amvv_what_grp = amvv_grp.create_group("what")
             amvv_what_grp.attrs["quantity"] = "AMVV"
             amvv_how_grp = amvv_grp.create_group("how")
@@ -189,8 +189,8 @@ def _write(data, filename, metadata, configuration, optype=None):
                 data_grp = dset_grp.create_group("data1")
                 ds = data_grp.create_dataset("data", data=ts_point)
                 # Add attributes to dataset to display as image in hdfview
-                ds.attrs["CLASS"] = np.string_("IMAGE")
-                ds.attrs["IMAGE_VERSION"] = np.string_("1.2")
+                ds.attrs["CLASS"] = np.str_("IMAGE")
+                ds.attrs["IMAGE_VERSION"] = np.str_("1.2")
 
                 # Store data/what group attributes
                 utils.store_odim_data_what_attrs(data_grp, metadata, scale_meta)
@@ -222,8 +222,8 @@ def _write(data, filename, metadata, configuration, optype=None):
                     data_grp = dset_grp.create_group(f"data{eidx+1}")
                     ds = data_grp.create_dataset("data", data=ts_point)
                     # Add attributes to dataset to display as image in hdfview
-                    ds.attrs["CLASS"] = np.string_("IMAGE")
-                    ds.attrs["IMAGE_VERSION"] = np.string_("1.2")
+                    ds.attrs["CLASS"] = np.str_("IMAGE")
+                    ds.attrs["IMAGE_VERSION"] = np.str_("1.2")
 
                     # Store data/what group attributes
                     utils.store_odim_data_what_attrs(data_grp, metadata, scale_meta)
