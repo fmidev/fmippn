@@ -24,6 +24,9 @@ COPY fmippn /fmippn
 # Disable dask
 RUN export OMP_NUM_THREADS=1
 RUN export HDF5_USE_FILE_LOCKING=FALSE
+ENV PYSTEPSRC /fmippn/pystepsrc
+ENV MPLCONFIGDIR /tmp
+ENV XDG_CACHE_HOME /tmp
 
 # Run
 WORKDIR /fmippn
