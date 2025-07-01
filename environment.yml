@@ -10,6 +10,6 @@ dependencies:
   - opencv
   - h5py
   - pillow
-  - pysteps=1.11.0
+  - pysteps=1.18.0
   - dask
   - pyfftw
