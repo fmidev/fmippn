@@ -10,7 +10,7 @@ RUN apt-get -qq update && apt-get -qq -y install curl bzip2 \
     && rm -rf /tmp/miniconda.sh
 
 COPY environment.yml .
-RUN conda install -c conda-forge mamba && \
+RUN conda install -c conda-forge --override-channels mamba && \
     mamba env create -f environment.yml -n fmippn && \
     mamba clean --all -f -y
 
