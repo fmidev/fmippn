@@ -1,9 +1,8 @@
 name: ppn
 channels:
   - conda-forge
-  - nodefaults
 dependencies:
-  - python>=3.12
+  - python>=3.7
   - git
   - numpy
   - scipy
@@ -11,8 +10,8 @@ dependencies:
   - opencv
   - h5py
   - pillow
-  - pysteps=1.18.1
   - dask
   - pyfftw
-  - pyproj
   - pip
+  - pip:
+    - git+https://github.com/pySTEPS/pysteps.git@opera_fixes
