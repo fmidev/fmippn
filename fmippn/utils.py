@@ -252,15 +252,24 @@ def copy_odim_attributes(odim_metadata, outf):
     # Copy attribute groups /what, /where and /how
     what = outf.create_group("what")
     for key, val in odim_metadata["what"].items():
-        what.attrs[key] = val
+        if isinstance(val, str):
+            what.attrs.create(key, **c_string(val))
+        else:
+            what.attrs[key] = val
 
     where = outf.create_group("where")
     for key, val in odim_metadata["where"].items():
-        where.attrs[key] = val
+        if isinstance(val, str):
+            where.attrs.create(key, **c_string(val))
+        else:
+            where.attrs[key] = val
 
     how = outf.create_group("how")
     for key, val in odim_metadata["how"].items():
-        how.attrs[key] = val
+        if isinstance(val, str):
+            how.attrs.create(key, **c_string(val))
+        else:
+            how.attrs[key] = val
 
 
 def store_odim_dset_attrs(dset_grp, dset_index, startdate, timestep):
