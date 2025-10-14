@@ -254,6 +254,8 @@ def copy_odim_attributes(odim_metadata, outf):
     for key, val in odim_metadata["what"].items():
         if isinstance(val, str):
             what.attrs.create(key, **c_string(val))
+        elif isinstance(val, bytes):
+            what.attrs.create(key, **c_string(val.decode("utf-8")))
         else:
             what.attrs[key] = val
 
@@ -261,6 +263,8 @@ def copy_odim_attributes(odim_metadata, outf):
     for key, val in odim_metadata["where"].items():
         if isinstance(val, str):
             where.attrs.create(key, **c_string(val))
+        elif isinstance(val, bytes):
+            where.attrs.create(key, **c_string(val.decode("utf-8")))
         else:
             where.attrs[key] = val
 
@@ -268,6 +272,8 @@ def copy_odim_attributes(odim_metadata, outf):
     for key, val in odim_metadata["how"].items():
         if isinstance(val, str):
             how.attrs.create(key, **c_string(val))
+        elif isinstance(val, bytes):
+            how.attrs.create(key, **c_string(val.decode("utf-8")))
         else:
             how.attrs[key] = val
 
