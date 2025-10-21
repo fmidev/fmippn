@@ -556,6 +556,8 @@ def read_observations(filelist, datasource, importer):
     elif utils.quantity_is_rate(input_qty) and utils.quantity_is_dbzh(fct_qty):
         obs, metadata = rrate_to_dbz(obs, metadata)
 
+    print("threshold: ", PD["converted_rain_thr"], " norain_value: ", PD["run_options"]["steps_set_no_rain_to_value"])
+        
     obs, metadata = thresholding(
         obs,
         metadata,
@@ -564,6 +566,8 @@ def read_observations(filelist, datasource, importer):
         fill_nan=PD["run_options"].get("steps_fill_nan", True),
     )
 
+    print("obs after thresholding: ", obs, " metadata: ", metadata)
+    
     if utils.quantity_is_rate(fct_qty) and PD["run_options"]["transform_to_dBR"]:
         obs, metadata = transform_to_decibels(obs, metadata)
 
