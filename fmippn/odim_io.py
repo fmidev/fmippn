@@ -1,4 +1,5 @@
 """Writing functions for storing the PPN output in HDF5 files"""
+
 import os
 
 import h5py
@@ -8,9 +9,7 @@ import utils
 from ppn_config import defaults
 
 
-def write_deterministic_to_file(
-    configuration, nowcast_data, filename=None, metadata=None
-):
+def write_deterministic_to_file(configuration, nowcast_data, filename=None, metadata=None):
     """Write deterministic output in ODIM HDF5 format..
 
     Input:
@@ -121,9 +120,7 @@ def _write(data, filename, metadata, configuration, optype=None):
     if optype == "mot":
         motion_timestep = configuration["data_source"].get("timestep")
         motion_pixelsize = configuration.get("nowcast_options").get("kmperpixel")
-        data = _convert_motion_units(
-            data_pxts=data, kmperpixel=motion_pixelsize, timestep=motion_timestep
-        )
+        data = _convert_motion_units(data_pxts=data, kmperpixel=motion_pixelsize, timestep=motion_timestep)
 
     # Remove things that break HDF5 output from metadata dictionary
     if "scale_meta" in metadata:
@@ -155,24 +152,30 @@ def _write(data, filename, metadata, configuration, optype=None):
             amvu_grp = outf.create_group("/dataset1/data1")
             ds = amvu_grp.create_dataset("data", data=AMVU)
             # Add attributes to dataset to display as image in hdfview
-            ds.attrs["CLASS"] = np.bytes_("IMAGE")
-            ds.attrs["IMAGE_VERSION"] = np.bytes_("1.2")
+            ds.attrs.create("CLASS", **utils.c_string("IMAGE"))
+            ds.attrs.create("IMAGE_VERSION", **utils.c_string("1.2"))
             amvu_what_grp = amvu_grp.create_group("what")
-            amvu_what_grp.attrs["quantity"] = "AMVU"
+            amvu_what_grp.attrs.create("quantity", **utils.c_string("AMVU"))
             amvu_how_grp = amvu_grp.create_group("how")
             for key, value in how_attrs.items():
-                amvu_how_grp.attrs[key] = value
+                if isinstance(value, str):
+                    amvu_how_grp.attrs.create(key, **utils.c_string(value))
+                else:
+                    amvu_how_grp.attrs[key] = value
 
             amvv_grp = outf.create_group("/dataset1/data2")
             ds = amvv_grp.create_dataset("data", data=AMVV)
             # Add attributes to dataset to display as image in hdfview
-            ds.attrs["CLASS"] = np.bytes_("IMAGE")
-            ds.attrs["IMAGE_VERSION"] = np.bytes_("1.2")
+            ds.attrs.create("CLASS", **utils.c_string("IMAGE"))
+            ds.attrs.create("IMAGE_VERSION", **utils.c_string("1.2"))
             amvv_what_grp = amvv_grp.create_group("what")
-            amvv_what_grp.attrs["quantity"] = "AMVV"
+            amvv_what_grp.attrs.create("quantity", **utils.c_string("AMVV"))
             amvv_how_grp = amvv_grp.create_group("how")
             for key, value in how_attrs.items():
-                amvv_how_grp.attrs[key] = value
+                if isinstance(value, str):
+                    amvv_how_grp.attrs.create(key, **utils.c_string(value))
+                else:
+                    amvv_how_grp.attrs[key] = value
 
         # Write deterministic forecast timeseries in ODIM format
         elif optype == "det":
@@ -180,17 +183,15 @@ def _write(data, filename, metadata, configuration, optype=None):
                 dset_grp = outf.create_group(f"/dataset{index+1}")
 
                 # Add attributes to each dataset
-                utils.store_odim_dset_attrs(
-                    dset_grp, index, startdate, nowcast_timestep
-                )
+                utils.store_odim_dset_attrs(dset_grp, index, startdate, nowcast_timestep)
 
                 # Store data
                 ts_point = data[index, :, :]
                 data_grp = dset_grp.create_group("data1")
                 ds = data_grp.create_dataset("data", data=ts_point)
                 # Add attributes to dataset to display as image in hdfview
-                ds.attrs["CLASS"] = np.bytes_("IMAGE")
-                ds.attrs["IMAGE_VERSION"] = np.bytes_("1.2")
+                ds.attrs.create("CLASS", **utils.c_string("IMAGE"))
+                ds.attrs.create("IMAGE_VERSION", **utils.c_string("1.2"))
 
                 # Store data/what group attributes
                 utils.store_odim_data_what_attrs(data_grp, metadata, scale_meta)
@@ -210,9 +211,7 @@ def _write(data, filename, metadata, configuration, optype=None):
                 dset_grp = outf.create_group(f"/dataset{index+1}")
 
                 # Add attributes to each dataset
-                utils.store_odim_dset_attrs(
-                    dset_grp, index, startdate, nowcast_timestep
-                )
+                utils.store_odim_dset_attrs(dset_grp, index, startdate, nowcast_timestep)
 
                 # Store ensemble members
                 for eidx in range(configuration["ensemble_size"]):
@@ -222,8 +221,8 @@ def _write(data, filename, metadata, configuration, optype=None):
                     data_grp = dset_grp.create_group(f"data{eidx+1}")
                     ds = data_grp.create_dataset("data", data=ts_point)
                     # Add attributes to dataset to display as image in hdfview
-                    ds.attrs["CLASS"] = np.bytes_("IMAGE")
-                    ds.attrs["IMAGE_VERSION"] = np.bytes_("1.2")
+                    ds.attrs.create("CLASS", **utils.c_string("IMAGE"))
+                    ds.attrs.create("IMAGE_VERSION", **utils.c_string("1.2"))
 
                     # Store data/what group attributes
                     utils.store_odim_data_what_attrs(data_grp, metadata, scale_meta)
@@ -242,22 +241,18 @@ def _write(data, filename, metadata, configuration, optype=None):
         if optype in ["det", "ens"]:
             # Write model specific metadata into /how group
             if configuration["run_options"]["nowcast_method"] == "steps":
-                how_grp.attrs["ensemble_nowcast_method"] = "steps"
-                how_grp.attrs["domain"] = configuration["nowcast_options"]["domain"]
+                how_grp.attrs.create("ensemble_nowcast_method", **utils.c_string("steps"))
+                how_grp.attrs.create("domain", **utils.c_string(configuration["nowcast_options"]["domain"]))
                 default_cascade_levels = defaults["nowcast_options"]["n_cascade_levels"]
-                how_grp.attrs["n_cascade_levels"] = configuration[
-                    "nowcast_options"
-                ].get("n_cascade_levels", default_cascade_levels)
+                how_grp.attrs["n_cascade_levels"] = configuration["nowcast_options"].get(
+                    "n_cascade_levels", default_cascade_levels
+                )
             elif configuration["run_options"]["nowcast_method"] == "linda":
-                how_grp.attrs["ensemble_nowcast_method"] = "linda"
-                how_grp.attrs["feature_method"] = configuration["nowcast_options"][
-                    "feature_method"
-                ]
-                how_grp.attrs["ari_order"] = str(
-                    configuration["nowcast_options"]["ari_order"]
+                how_grp.attrs.create("ensemble_nowcast_method", **utils.c_string("linda"))
+                how_grp.attrs.create(
+                    "feature_method", **utils.c_string(configuration["nowcast_options"]["feature_method"])
                 )
-                how_grp.attrs["max_num_features"] = str(
-                    configuration["nowcast_options"]["max_num_features"]
-                )
+                how_grp.attrs["ari_order"] = str(configuration["nowcast_options"]["ari_order"])
+                how_grp.attrs["max_num_features"] = str(configuration["nowcast_options"]["max_num_features"])
 
     return None

@@ -32,6 +32,16 @@ def utcnow_floored(increment=5):
     return now
 
 
+def c_string(string: str) -> h5py.Datatype:
+    # pylint: disable=c-extension-no-member
+    tid = h5py.h5t.C_S1.copy()
+    tid.set_size(len(string) + 1)
+    tid.set_strpad(h5py.h5t.STR_NULLTERM)
+
+    dtype = h5py.Datatype(tid)
+    return {"data": string, "shape": None, "dtype": dtype}
+
+
 def store_timeseries(grp, data, startdate, timestep, metadata=None):
     """Store timeseries for one nowcast ensemble member.
 
@@ -242,15 +252,30 @@ def copy_odim_attributes(odim_metadata, outf):
     # Copy attribute groups /what, /where and /how
     what = outf.create_group("what")
     for key, val in odim_metadata["what"].items():
-        what.attrs[key] = val
+        if isinstance(val, str):
+            what.attrs.create(key, **c_string(val))
+        elif isinstance(val, bytes):
+            what.attrs.create(key, **c_string(val.decode("utf-8")))
+        else:
+            what.attrs[key] = val
 
     where = outf.create_group("where")
     for key, val in odim_metadata["where"].items():
-        where.attrs[key] = val
+        if isinstance(val, str):
+            where.attrs.create(key, **c_string(val))
+        elif isinstance(val, bytes):
+            where.attrs.create(key, **c_string(val.decode("utf-8")))
+        else:
+            where.attrs[key] = val
 
     how = outf.create_group("how")
     for key, val in odim_metadata["how"].items():
-        how.attrs[key] = val
+        if isinstance(val, str):
+            how.attrs.create(key, **c_string(val))
+        elif isinstance(val, bytes):
+            how.attrs.create(key, **c_string(val.decode("utf-8")))
+        else:
+            how.attrs[key] = val
 
 
 def store_odim_dset_attrs(dset_grp, dset_index, startdate, timestep):
@@ -269,13 +294,15 @@ def store_odim_dset_attrs(dset_grp, dset_index, startdate, timestep):
 
     # Add attributes to each dataset
     dset_how_grp = dset_grp.create_group("how")
-    dset_how_grp.attrs["simulated"] = "True"
+
+    dset_how_grp.attrs.create("simulated", **c_string("True"))
 
     dset_what_grp = dset_grp.create_group("what")
-    dset_what_grp.attrs["startdate"] = str(dt.datetime.strftime(valid_time, "%Y%m%d"))
-    dset_what_grp.attrs["enddate"] = str(dt.datetime.strftime(valid_time, "%Y%m%d"))
-    dset_what_grp.attrs["starttime"] = str(dt.datetime.strftime(valid_time, "%H%M%S"))
-    dset_what_grp.attrs["endtime"] = str(dt.datetime.strftime(valid_time, "%H%M%S"))
+    # use c strings to store these attributes
+    dset_what_grp.attrs.create("startdate", **c_string(dt.datetime.strftime(valid_time, "%Y%m%d")))
+    dset_what_grp.attrs.create("enddate", **c_string(dt.datetime.strftime(valid_time, "%Y%m%d")))
+    dset_what_grp.attrs.create("starttime", **c_string(dt.datetime.strftime(valid_time, "%H%M%S")))
+    dset_what_grp.attrs.create("endtime", **c_string(dt.datetime.strftime(valid_time, "%H%M%S")))
 
 
 def store_odim_data_what_attrs(data_grp, metadata, scale_meta):
@@ -299,7 +326,7 @@ def store_odim_data_what_attrs(data_grp, metadata, scale_meta):
 
     # Create data/what group and store metadata
     data_what_grp = data_grp.create_group("what")
-    data_what_grp.attrs["quantity"] = quantity
+    data_what_grp.attrs.create("quantity", **c_string(quantity))
     data_what_grp.attrs["gain"] = scale_meta.get("gain")
     data_what_grp.attrs["offset"] = scale_meta.get("offset")
     data_what_grp.attrs["nodata"] = scale_meta.get("nodata")
