@@ -114,8 +114,30 @@ def run(timestamp=None, config=None, **kwargs):
     input_files = get_filelist(startdate, datasource)
 
     if None in input_files[0]:
-        none_times = [d for i, d in enumerate(input_files[1]) if input_files[0][i] is None]
-        raise FileNotFoundError(f"No input data for {', '.join(str(i) for i in none_times)} at {datasource['root_path']}!")
+
+        min_required_timesteps = run_options.get("num_min_prev_observations", run_options["num_prev_observations"])
+
+        # Require at least min_required_timesteps valid input files (including the latest)
+        # at the end of the list
+        min_num_last_timesteps = input_files[0][-min_required_timesteps:]
+        if None in min_num_last_timesteps:
+            none_times = [d for i, d in enumerate(input_files[1]) if input_files[0][i] is None]
+            raise FileNotFoundError(
+                f"Input data missing for {', '.join(str(i) for i in none_times)} at {datasource['root_path']}! "
+                f"At least {min_required_timesteps} previous time steps are required."
+            )
+        log(
+            "warning",
+            f"Some input data missing, but at least {min_required_timesteps} previous time steps are available. "
+            f"Missing timesteps: [{', '.join(str(d) for i, d in enumerate(input_files[1]) if input_files[0][i] is None)}]. "
+            f"Proceeding with nowcast.",
+        )
+        # Pick the last continuously valid input files
+        first_not_valid_step = input_files[0][::-1].index(None)
+        input_files = (
+            input_files[0][first_not_valid_step - 1 :],
+            input_files[1][first_not_valid_step - 1 :],
+        )
 
     if datasource["importer"] in {"opera_hdf5", "odim_hdf5"}:
         input_quantity = datasource["importer_kwargs"]["qty"]
