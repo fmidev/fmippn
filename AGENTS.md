@@ -6,6 +6,7 @@ Radar-based precipitation nowcasting system of the Finnish Meteorological Instit
 
 - `fmippn/`: the Python nowcaster, where nearly all work happens. Entry point `run_ppn.py` → `ppn.run()`.
   - `ppn.py`: pipeline (read observations → motion → nowcast → write output).
+  - `nowcasters.py`: nowcast method setup, one `Nowcaster` per deterministic/ensemble nowcast.
   - `ppn_config.py`: `defaults` dict and config loading/checks.
   - `odim_io.py`, `utils.py`: ODIM HDF5 output.
   - `config/*.json`: per-run configurations.
@@ -18,9 +19,16 @@ The source of truth is `ppn_config.defaults` deep-merged with `fmippn/config/<na
 
 Deterministic and ensemble nowcasts normally run as separate runs with separate config files (e.g. `ravake-det.json`, `ravake-ens.json`), toggled by `run_options.run_deterministic` / `run_ensemble`.
 
-## Adding a nowcast or motion method
+## Adding a nowcast method
 
-Methods are dispatched by the `*_method(module=...)` getters in `ppn.py` (`importer_method`, `optflow_method`, `nowcast_method`, `deterministic_method`); each has a `pysteps` branch and room for more. Method kwargs are assembled in `generate_pysteps_setup()` from `nowcast_options`, with per-method options under `nowcast_options.method_specific_options.<method>`. `generate()` calls every nowcaster as `nowcaster(observations, motion_field, leadtimes, **kwargs)`; new backends get an adapter to that signature.
+`nowcasters.get_nowcaster(method, kind, ...)` builds a `Nowcaster` for `run_options.deterministic_method` (kind `"deterministic"`) and `run_options.nowcast_method` (kind `"ensemble"`); `ppn.run()` builds only the ones the run generates. A `Nowcaster` bundles:
+
+- `forecast`, called as `forecast(observations, motion_field, leadtimes, **kwargs)`; new backends get an adapter to that signature.
+- `kwargs`, from `nowcasters.method_options()`: `nowcast_options` merged with `nowcast_options.method_specific_options.<method>`, as a new dict.
+- `prepare_observations`, applied to observations read in the forecast quantity with NaN kept (default: pysteps thresholding/dBR). The motion field always uses the pysteps-prepared observations.
+- `select_observations`, picking the input window from the prepared observations.
+
+Ensemble output written leadtime by leadtime goes through `ppn.write_ensemble_leadtime()`; `ppn.postprocess_forecast()` converts any forecast to the output quantity. Motion and importer methods are still chosen by `optflow_method()` / `importer_method()` in `ppn.py`.
 
 ## mlcast integration (in progress)
 
@@ -28,14 +36,16 @@ Branch `mlcast-forecasting` adds mlcast machine-learning models as a nowcast bac
 
 ## Running and verifying
 
-There is no test suite. A change is verified by a real run inside the Docker image:
+Run the tests from `fmippn/` in an environment built from `environment.yml`:
 
 ```sh
-docker-compose run --rm fmippn          # interactive shell in the container
-cd /fmippn && python run_ppn.py -c <config-name> -t YYYYMMDDHHMM
+python -m pytest tests
 ```
 
-then inspecting the ODIM HDF5 files in the output folder. Runs need radar input mounted at `/input`, which is usually not available to you: propose the exact command and what to check in the output, and report the change as unverified. Note that `docker-compose.yml` mounts hard-coded host paths that may point at a different checkout than this one.
+- Unit tests cover the extracted pipeline functions and need no data.
+- Golden-master tests (`tests/golden.py`, `tests/test_golden.py`) run short, seeded copies of `finradfast-det` / `finradfast-ens` and compare every output HDF5 dataset and attribute against a recorded baseline. They need ODIM composites in `fmippn/tests/testdata/odim/` and the baseline in `fmippn/tests/testdata/golden/` (both untracked; the tests skip without them, so report a skip as unverified). Record a baseline with `python tests/golden.py record` only on code whose output is known to be right, and when a change is meant to alter output, show the `python tests/golden.py compare` differences before re-recording.
+
+A full run is `python run_ppn.py -c <config-name> -t YYYYMMDDHHMM` inside the Docker image. Note that `docker-compose.yml` mounts hard-coded host paths that may point at a different checkout than this one.
 
 Runtime gotchas: keep `OMP_NUM_THREADS=1` (OpenMP and dask conflict) and `HDF5_USE_FILE_LOCKING=FALSE`. `nowcast_options.seed` must be `None` or an int in `[0, 2**32-1]`.
 

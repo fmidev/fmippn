@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 Currently this project DOES NOT adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2026-11-05
+
+### Added
+
+- `pytest` test suite with golden-master tests comparing the output of the `finradfast-det` and `finradfast-ens` configurations against recorded baselines
+- `finradfast-det.json` and `finradfast-ens.json` configurations
+
+### Changed
+
+- Nowcast methods are set up per deterministic and ensemble nowcast in the new module `nowcasters.py`, preparing for mlcast models
+- Deterministic-only runs no longer require `run_options.nowcast_method` to be `steps` or `linda`
+- `nowcast_options` is no longer modified while setting up the nowcast; method-specific options are merged into a copy
+
 ## 2023-01-30
 
 ### Changed
