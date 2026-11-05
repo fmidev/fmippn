@@ -82,8 +82,6 @@ def run(timestamp=None, config=None, **kwargs):
     # Used methods
     importer = importer_method(name=datasource["importer"])
     optflow = optflow_method("pysteps")
-    nowcaster = nowcast_method("pysteps")
-    deterministic_nowcaster = deterministic_method("pysteps")
 
     # Option groups from configuration
     run_options = PD["run_options"]
@@ -139,25 +137,44 @@ def run(timestamp=None, config=None, **kwargs):
 
     resolve_seed(run_options.get("regenerate_perturbed_motion"))
 
-    # generate suitable objects for passing to pysteps methods
-    # based on the selected model
-    r_thr, dbr_thr = compute_rain_threshold()
-    if run_options["nowcast_method"] in ["steps", "linda"]:
-        nowcast_kwargs = generate_pysteps_setup(
-            r_thr, dbr_thr, method=run_options["nowcast_method"]
+    # Set up the nowcast methods of the nowcasts that are generated
+    rain_thresholds = compute_rain_threshold()
+    det_nowcaster = None
+    ens_nowcaster = None
+    if run_options.get("run_deterministic"):
+        det_nowcaster = nowcasters.get_nowcaster(
+            run_options["deterministic_method"], "deterministic", PD, rain_thresholds
         )
-    else:
-        raise NotImplementedError(
-            f"nowcast_method = {run_options['nowcast_method']} not implemented, possible values are 'steps' and 'linda'"
+    if run_options.get("run_ensemble"):
+        ens_nowcaster = nowcasters.get_nowcaster(
+            run_options["nowcast_method"],
+            "ensemble",
+            PD,
+            rain_thresholds,
+            callback=cb_nowcast,
         )
 
-    observations, obs_metadata = read_observations(input_files, datasource, importer)
-    observations, obs_metadata = nowcasters.prepare_pysteps_observations(
-        observations, obs_metadata, PD
+    raw_observations, raw_metadata = read_observations(
+        input_files, datasource, importer
     )
+    # Motion is always estimated from observations prepared for pysteps
+    observations, obs_metadata = nowcasters.prepare_pysteps_observations(
+        raw_observations, raw_metadata, PD
+    )
+    prepared = {nowcasters.prepare_pysteps_observations: (observations, obs_metadata)}
 
-    # Save obs_metadata in callback function (global dictionary)
-    PD_callback["obs_metadata"] = obs_metadata
+    def observations_for(nowcaster):
+        """Return (observations, metadata) prepared for `nowcaster`."""
+        if nowcaster.prepare_observations not in prepared:
+            prepared[nowcaster.prepare_observations] = nowcaster.prepare_observations(
+                raw_observations, raw_metadata, PD
+            )
+        obs, meta = prepared[nowcaster.prepare_observations]
+        return nowcaster.select_observations(obs), meta
+
+    if ens_nowcaster is not None:
+        # Save metadata of the ensemble input for the callback function (global dictionary)
+        PD_callback["obs_metadata"] = observations_for(ens_nowcaster)[1]
 
     projection_meta = {
         "projstr": obs_metadata["projection"],
@@ -191,7 +208,12 @@ def run(timestamp=None, config=None, **kwargs):
     # Regenerate ensemble motion
     if run_options.get("regenerate_perturbed_motion"):
         log("info", "Regenerating ensemble motion fields...")
-        ensemble_motion = regenerate_ensemble_motion(motion_field, nowcast_kwargs)
+        ensemble_motion = regenerate_ensemble_motion(
+            motion_field,
+            nowcasters.method_options(
+                PD["nowcast_options"], run_options["nowcast_method"]
+            ),
+        )
         log("info", "Finished regeneration.")
         if output_options.get("store_perturbed_motion", False) and output_options.get(
             "write_asap", False
@@ -215,30 +237,15 @@ def run(timestamp=None, config=None, **kwargs):
     else:
         ensemble_motion = None
 
-    if run_options.get("run_deterministic"):
-        # Get correct input slice for deterministic nowcast
-        if PD["run_options"]["deterministic_method"] == "linda":
-            det_nowcast_kwargs = nowcast_kwargs.copy()
-            det_nowcast_kwargs["add_perturbations"] = False
-            det_nowcast_kwargs["return_output"] = True
-            det_nowcast_kwargs["callback"] = None
-            det_nowcast_kwargs["n_ens_members"] = 1
-            # LINDA needs the last ari_order+2 observations
-            deterministic, det_meta = generate_deterministic(
-                observations[-(nowcast_kwargs["ari_order"] + 2) :],
-                motion_field,
-                deterministic_nowcaster,
-                metadata=obs_metadata,
-                nowcast_kwargs=det_nowcast_kwargs,
-            )
-        else:
-            # Extrapolation method with one input timestep
-            deterministic, det_meta = generate_deterministic(
-                observations[-1],
-                motion_field,
-                deterministic_nowcaster,
-                metadata=obs_metadata,
-            )
+    if det_nowcaster is not None:
+        det_observations, det_obs_metadata = observations_for(det_nowcaster)
+        deterministic, det_meta = generate_deterministic(
+            det_observations,
+            motion_field,
+            det_nowcaster.forecast,
+            metadata=det_obs_metadata,
+            nowcast_kwargs=det_nowcaster.kwargs,
+        )
         if output_options.get("store_deterministic", False) and output_options.get(
             "write_asap", False
         ):
@@ -263,29 +270,30 @@ def run(timestamp=None, config=None, **kwargs):
         deterministic = None
         det_meta = dict()
 
-    if run_options.get("run_ensemble"):
+    if ens_nowcaster is not None:
+        ens_observations, ens_obs_metadata = observations_for(ens_nowcaster)
         if output_options.get("write_leadtimes_separately", False):
             # Run forecast without saving it here, saving through callback function
             log(
                 "debug",
                 "Callback was requested, will skip saving regardless of settings",
             )
-            nowcaster(
-                observations,
+            ens_nowcaster.forecast(
+                ens_observations,
                 motion_field,
                 PD["run_options"]["leadtimes"],
-                **nowcast_kwargs,
+                **ens_nowcaster.kwargs,
             )
             ensemble_forecast = None
             ens_meta = dict()
             PD["ensemble_size"] = None
         else:
             ensemble_forecast, ens_meta = generate(
-                observations,
+                ens_observations,
                 motion_field,
-                nowcaster,
-                nowcast_kwargs,
-                metadata=obs_metadata,
+                ens_nowcaster.forecast,
+                ens_nowcaster.kwargs,
+                metadata=ens_obs_metadata,
             )
             PD["ensemble_size"] = ensemble_forecast.shape[0]
 
@@ -454,50 +462,6 @@ def optflow_method(module="pysteps", **kwargs):
     raise ValueError("Unknown module {} for optical flow method".format(module))
 
 
-def nowcast_method(module="pysteps", **kwargs):
-    """Wrapper for easily switching between modules which provide nowcasting
-    methods.
-
-    Input:
-        module -- parameter for if/else block (default="pysteps")
-        **kwargs -- additional keyword arguments passed to nowcast method getter
-
-    Output:
-        function -- a function object
-
-    Raise ValueError for invalid `module` selectors.
-    """
-    if module == "pysteps":
-        return pysteps.nowcasts.get_method(
-            PD["run_options"]["nowcast_method"], **kwargs
-        )
-    # Add more options here
-
-    raise ValueError("Unknown module {} for nowcast method".format(module))
-
-
-def deterministic_method(module="pysteps", **kwargs):
-    """Wrapper for easily switching between modules which provide deterministic
-    nowcasting methods.
-
-    Input:
-        module -- parameter for if/else block (default="pysteps")
-        **kwargs -- additional keyword arguments passed to nowcast method getter
-
-    Output:
-        function -- a function object
-
-    Raise ValueError for invalid `module` selectors.
-    """
-    if module == "pysteps":
-        return pysteps.nowcasts.get_method(
-            PD["run_options"]["deterministic_method"], **kwargs
-        )
-    # Add more options here
-
-    raise ValueError("Unknown module {} for deterministic method".format(module))
-
-
 def compute_rain_threshold():
     """Convert the configured rain threshold to the forecast quantity.
 
@@ -533,32 +497,6 @@ def compute_rain_threshold():
     PD["converted_rain_thr"] = r_thr  # DBZH or non-decibel RATE is used in thresholding
 
     return r_thr, dbr_thr
-
-
-def generate_pysteps_setup(r_thr, dbr_thr, method="steps"):
-    """Generate `nowcast_kwargs` objects that are suitable
-    for using in pysteps nowcasting methods.
-
-    `r_thr` and `dbr_thr` are the rain thresholds from compute_rain_threshold().
-    """
-    # kwargs for nowcasting method: common and method-specific options as a new dictionary
-    nowcast_kwargs = nowcasters.method_options(PD["nowcast_options"], method)
-
-    if method == "steps":
-        # STEPS-specific options derived from other configurations
-        # Threshold for masking
-        nowcast_kwargs["precip_thr"] = dbr_thr if dbr_thr is not None else r_thr
-    elif method == "linda":
-        # LINDA-specific options derived from other configurations
-        # Threshold for masking
-        pass
-
-    if PD["output_options"].get("write_leadtimes_separately", False):
-        nowcast_kwargs["callback"] = cb_nowcast
-        # Do not store whole forecast array but write out step by step
-        nowcast_kwargs["return_output"] = False
-
-    return nowcast_kwargs
 
 
 def get_filelist(startdate, datasource, num_prev_observations):

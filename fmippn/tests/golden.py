@@ -87,9 +87,10 @@ def make_config(base, overrides, input_dir, output_dir, config_dir):
     return path
 
 
-def run_case(name, output_dir, input_dir=INPUT_DIR):
+def run_case(name, output_dir, input_dir=INPUT_DIR, extra_overrides=None):
     """Run one golden-master case, writing its output files into output_dir."""
     base, overrides, drop_index = CASES[name]
+    overrides = _deep_update(copy.deepcopy(overrides), extra_overrides or {})
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     timestamp = latest_timestamp(input_dir)

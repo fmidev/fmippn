@@ -107,3 +107,61 @@ def test_prepare_pysteps_observations(pd_config):
     # Inputs are kept intact
     assert np.isnan(obs[0, 0, 0])
     assert meta["zerovalue"] == -32
+
+
+@pytest.fixture
+def nowcast_config(pd_config):
+    pd_config["nowcast_options"]["n_ens_members"] = 3
+    pd_config["output_options"]["write_leadtimes_separately"] = True
+    return pd_config
+
+
+def callback(field):
+    pass
+
+
+def test_deterministic_extrapolation(nowcast_config):
+    nc = nowcasters.get_nowcaster(
+        "extrapolation", "deterministic", nowcast_config, (8.0, None)
+    )
+    assert nc.kwargs == {}
+    obs = np.zeros((3, 4, 5))
+    assert nc.select_observations(obs).shape == (4, 5)
+
+
+def test_deterministic_linda(nowcast_config):
+    nc = nowcasters.get_nowcaster("linda", "deterministic", nowcast_config, (8.0, None))
+    assert nc.kwargs["add_perturbations"] is False
+    assert nc.kwargs["return_output"] is True
+    assert nc.kwargs["callback"] is None
+    assert nc.kwargs["n_ens_members"] == 1
+    # ari_order 1 -> 3 latest observations
+    obs = np.arange(5)[:, None, None] * np.ones((5, 2, 2))
+    np.testing.assert_array_equal(nc.select_observations(obs)[:, 0, 0], [2, 3, 4])
+
+
+def test_ensemble_steps(nowcast_config):
+    nc = nowcasters.get_nowcaster(
+        "steps", "ensemble", nowcast_config, (0.5, 3.0), callback=callback
+    )
+    assert nc.kwargs["precip_thr"] == 3.0
+    assert nc.kwargs["callback"] is callback
+    assert nc.kwargs["return_output"] is False
+    assert nc.kwargs["n_ens_members"] == 3
+    assert nc.kwargs["n_cascade_levels"] == 6
+    assert "method_specific_options" in nowcast_config["nowcast_options"]
+    obs = np.zeros((3, 4, 5))
+    assert nc.select_observations(obs) is obs
+
+
+def test_ensemble_steps_without_dbr_threshold(nowcast_config):
+    nowcast_config["output_options"]["write_leadtimes_separately"] = False
+    nc = nowcasters.get_nowcaster("steps", "ensemble", nowcast_config, (8.0, None))
+    assert nc.kwargs["precip_thr"] == 8.0
+    assert "callback" not in nc.kwargs
+
+
+@pytest.mark.parametrize("method", ["extrapolation", "not-a-method"])
+def test_ensemble_unknown_method_raises(nowcast_config, method):
+    with pytest.raises(NotImplementedError):
+        nowcasters.get_nowcaster(method, "ensemble", nowcast_config, (8.0, None))

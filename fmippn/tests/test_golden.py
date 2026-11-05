@@ -14,3 +14,17 @@ pytestmark = pytest.mark.skipif(
 def test_output_matches_baseline(case, tmp_path):
     output = golden.run_case(case, tmp_path / case)
     assert golden.compare_dirs(golden.GOLDEN_DIR / case, output) == []
+
+
+def test_deterministic_run_without_ensemble_method(tmp_path):
+    # A deterministic-only run does not depend on run_options.nowcast_method,
+    # except for the method attributes written in /how
+    output = golden.run_case(
+        "det",
+        tmp_path / "det",
+        extra_overrides={"run_options": {"nowcast_method": "not-a-method"}},
+    )
+    diffs = golden.compare_dirs(golden.GOLDEN_DIR / "det", output)
+    # Differences are "<file>: <object>: <message>"
+    assert diffs
+    assert all(d.split(": ")[1] == "how" for d in diffs), diffs
