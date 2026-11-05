@@ -166,20 +166,23 @@ def _get_default_nodata(store_dtype, cfg_nodata):
 
 
 def get_odim_attrs_from_input(infile):
-    """Read attribute groups /what, /where and /how from input ODIM HDF5 file.
+    """Read the root attributes (e.g. Conventions) and attribute groups /what,
+    /where and /how from input ODIM HDF5 file.
 
     Input:
         infile -- ODIM HDF5 input composite filename
 
     Output:
-        A dictionary with dictionaries 'what', 'where' and 'how' containing the attributes.
+        A dictionary with dictionaries 'root', 'what', 'where' and 'how' containing the attributes.
     """
     with h5py.File(infile, "r") as f:
+        root = dict(f.attrs)
         what = dict(f["what"].attrs)
         where = dict(f["where"].attrs)
         how = dict(f["how"].attrs)
 
     return {
+        "root": root,
         "what": what,
         "where": where,
         "how": how,
@@ -255,14 +258,16 @@ def set_attr(attrs, key, value):
 
 
 def copy_odim_attributes(odim_metadata, outf):
-    """Copy attribute groups /what, /where and /how from
-    input ODIM HDF5 file to output ODIM HDF5 file as they are.
+    """Copy the root attributes and attribute groups /what, /where and /how
+    from input ODIM HDF5 file to output ODIM HDF5 file as they are.
 
     Keyword arguments:
-    odim_metadata -- dictionary containing subdictionaries what, where
+    odim_metadata -- dictionary containing subdictionaries root, what, where
                      and how read from ODIM HDF5 input composite
     outf -- FMI-PPN output HDF5 file object
     """
+    for key, val in odim_metadata["root"].items():
+        set_attr(outf.attrs, key, val)
 
     # Copy attribute groups /what, /where and /how
     what = outf.create_group("what")

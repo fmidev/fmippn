@@ -15,6 +15,8 @@ Currently this project DOES NOT adhere to [Semantic Versioning](https://semver.o
 
 ### Changed
 
+- ODIM output files copy the root attributes (`Conventions`) of the input composite
+- Motion output `how/units` is `m/s` (was `m/s,`)
 - Nowcast methods are set up per deterministic and ensemble nowcast in the new module `nowcasters.py`, preparing for mlcast models
 - Deterministic-only runs no longer require `run_options.nowcast_method` to be `steps` or `linda`
 - `nowcast_options` is no longer modified while setting up the nowcast; method-specific options are merged into a copy

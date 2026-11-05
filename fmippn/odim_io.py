@@ -150,7 +150,7 @@ def _write(data, filename, metadata, configuration, optype=None):
             how_attrs = {
                 "input_interval": 60 * motion_timestep,
                 "kmperpixel": motion_pixelsize,
-                "units": "m/s,",
+                "units": "m/s",
             }
 
             amvu_grp = outf.create_group("/dataset1/data1")
