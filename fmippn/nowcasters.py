@@ -6,6 +6,7 @@ global configuration in ppn.py.
 
 import copy
 
+import utils
 from ppn_config import defaults
 
 DEFAULT_N_CASCADE_LEVELS = defaults["nowcast_options"]["method_specific_options"][
@@ -49,3 +50,29 @@ def method_how_attrs(configuration):
             "max_num_features": str(options["max_num_features"]),
         }
     return {}
+
+
+def prepare_pysteps_observations(observations, metadata, configuration):
+    """Prepare observations for pysteps motion and nowcast methods.
+
+    Values under the rain threshold (`converted_rain_thr`) and, optionally,
+    missing values are set to `run_options.steps_set_no_rain_to_value`. Rain
+    rates are transformed to dBR if `run_options.transform_to_dBR` is set.
+    The inputs are not modified.
+
+    Return a tuple (observations, metadata).
+    """
+    run_options = configuration["run_options"]
+    obs, meta = utils.thresholding(
+        observations.copy(),
+        dict(metadata),
+        threshold=configuration["converted_rain_thr"],
+        norain_value=run_options["steps_set_no_rain_to_value"],
+        fill_nan=run_options.get("steps_fill_nan", True),
+    )
+
+    fct_qty = run_options.get("forecast_as_quantity", configuration["input_quantity"])
+    if utils.quantity_is_rate(fct_qty) and run_options["transform_to_dBR"]:
+        obs, meta = utils.transform_to_decibels(obs, meta)
+
+    return obs, meta

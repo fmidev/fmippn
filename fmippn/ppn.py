@@ -141,14 +141,20 @@ def run(timestamp=None, config=None, **kwargs):
 
     # generate suitable objects for passing to pysteps methods
     # based on the selected model
+    r_thr, dbr_thr = compute_rain_threshold()
     if run_options["nowcast_method"] in ["steps", "linda"]:
-        nowcast_kwargs = generate_pysteps_setup(method=run_options["nowcast_method"])
+        nowcast_kwargs = generate_pysteps_setup(
+            r_thr, dbr_thr, method=run_options["nowcast_method"]
+        )
     else:
         raise NotImplementedError(
             f"nowcast_method = {run_options['nowcast_method']} not implemented, possible values are 'steps' and 'linda'"
         )
 
     observations, obs_metadata = read_observations(input_files, datasource, importer)
+    observations, obs_metadata = nowcasters.prepare_pysteps_observations(
+        observations, obs_metadata, PD
+    )
 
     # Save obs_metadata in callback function (global dictionary)
     PD_callback["obs_metadata"] = obs_metadata
@@ -492,12 +498,15 @@ def deterministic_method(module="pysteps", **kwargs):
     raise ValueError("Unknown module {} for deterministic method".format(module))
 
 
-def generate_pysteps_setup(method="steps"):
-    """Generate `nowcast_kwargs` objects that are suitable
-    for using in pysteps nowcasting methods."""
-    # kwargs for nowcasting method: common and method-specific options as a new dictionary
-    nowcast_kwargs = nowcasters.method_options(PD["nowcast_options"], method)
+def compute_rain_threshold():
+    """Convert the configured rain threshold to the forecast quantity.
 
+    Store the threshold used for thresholding observations (DBZH or
+    non-decibel RATE) in PD["converted_rain_thr"].
+
+    Return a tuple (r_thr, dbr_thr), where dbr_thr is the threshold in dBR
+    units or None if the forecast quantity is not RATE.
+    """
     # This threshold is used in masking and probability masking
     # rrate units need to be transformed to decibel, so that comparisons can be done
     # Check if forecast is done for different quantity than input and convert if necessary
@@ -522,6 +531,18 @@ def generate_pysteps_setup(method="steps"):
         r_thr = 10 * np.log10(zr_a * r_thr**zr_b)
 
     PD["converted_rain_thr"] = r_thr  # DBZH or non-decibel RATE is used in thresholding
+
+    return r_thr, dbr_thr
+
+
+def generate_pysteps_setup(r_thr, dbr_thr, method="steps"):
+    """Generate `nowcast_kwargs` objects that are suitable
+    for using in pysteps nowcasting methods.
+
+    `r_thr` and `dbr_thr` are the rain thresholds from compute_rain_threshold().
+    """
+    # kwargs for nowcasting method: common and method-specific options as a new dictionary
+    nowcast_kwargs = nowcasters.method_options(PD["nowcast_options"], method)
 
     if method == "steps":
         # STEPS-specific options derived from other configurations
@@ -605,9 +626,8 @@ def select_input_files(
 
 
 def read_observations(filelist, datasource, importer):
-    """Read observations from archives using pysteps methods. Also threshold
-    the input data and (optionally) convert dBZ -> dBR based on configuration
-    parameters."""
+    """Read observations from archives using pysteps methods and convert them
+    to the forecast quantity. Missing values are kept as NaN."""
     # PGM files contain dBZ values
     obs, _, metadata = pysteps.io.readers.read_timeseries(
         filelist, importer, **datasource["importer_kwargs"]
@@ -620,17 +640,6 @@ def read_observations(filelist, datasource, importer):
         obs, metadata = dbz_to_rrate(obs, metadata)
     elif utils.quantity_is_rate(input_qty) and utils.quantity_is_dbzh(fct_qty):
         obs, metadata = rrate_to_dbz(obs, metadata)
-
-    obs, metadata = thresholding(
-        obs,
-        metadata,
-        threshold=PD["converted_rain_thr"],
-        norain_value=PD["run_options"]["steps_set_no_rain_to_value"],
-        fill_nan=PD["run_options"].get("steps_fill_nan", True),
-    )
-
-    if utils.quantity_is_rate(fct_qty) and PD["run_options"]["transform_to_dBR"]:
-        obs, metadata = transform_to_decibels(obs, metadata)
 
     return obs, metadata
 
@@ -645,51 +654,6 @@ def rrate_to_dbz(data, metadata):
     return pysteps.utils.conversion.to_reflectivity(
         data, metadata, PD["data_options"]["zr_a"], PD["data_options"]["zr_b"]
     )
-
-
-def transform_to_decibels(data, metadata, inverse=False):
-    """Transform data to decibel units. Assumes thresholded data.
-
-    If argument `inverse` is True, perform transform from decibel units to
-    normal units.
-    """
-    threshold = metadata["threshold"]
-    zerovalue = metadata["zerovalue"]
-    transform = metadata["transform"]
-
-    data = data.copy()
-    metadata = metadata.copy()
-
-    if inverse:
-        log("debug", "Converting data FROM dB units")
-        new_transform = None
-        new_threshold = 10.0 ** (threshold / 10.0)
-        new_zerovalue = 10.0 ** (zerovalue / 10.0)
-        data = 10.0 ** (data / 10.0)
-    else:
-        log("debug", "Converting data TO dB units")
-        new_transform = "dB"
-        new_threshold = 10.0 * np.log10(threshold)
-        new_zerovalue = 10.0 * np.log10(zerovalue)
-        data = 10.0 * np.log10(data)
-
-    metadata["transform"] = new_transform
-    metadata["zerovalue"] = new_zerovalue
-    metadata["threshold"] = new_threshold
-
-    return data, metadata
-
-
-def thresholding(data, metadata, threshold, norain_value, fill_nan=True):
-    """Set values under 'threshold' to 'norain_value'. Optionally replace np.nan with 'norain_value'."""
-    if fill_nan:
-        data[~np.isfinite(data)] = norain_value
-    data[data < threshold] = norain_value
-
-    metadata["zerovalue"] = norain_value
-    metadata["threshold"] = threshold
-
-    return data, metadata
 
 
 def generate(observations, motion_field, nowcaster, nowcast_kwargs, metadata=None):
@@ -712,7 +676,7 @@ def postprocess_forecast(forecast, metadata):
     Return a tuple (forecast, metadata).
     """
     if (metadata["unit"] == "mm/h") and (metadata["transform"] == "dB"):
-        forecast, meta = transform_to_decibels(forecast, metadata, inverse=True)
+        forecast, meta = utils.transform_to_decibels(forecast, metadata, inverse=True)
     else:
         meta = metadata
 
@@ -745,7 +709,7 @@ def postprocess_forecast(forecast, metadata):
     rain_threshold = PD["out_rain_threshold"]
     norain_for_output = PD["out_norain_value"]
 
-    forecast, meta = thresholding(
+    forecast, meta = utils.thresholding(
         forecast,
         meta,
         threshold=rain_threshold,

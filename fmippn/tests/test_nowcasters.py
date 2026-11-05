@@ -88,3 +88,22 @@ def test_postprocess_forecast_dbr_to_dbz(output_config):
     expected_dbz = 10 * np.log10(223.0 * 10**1.53)
     np.testing.assert_allclose(out, [[[expected_dbz, -32.0]]])
     assert out_meta["unit"] == "dBZ"
+
+
+def test_prepare_pysteps_observations(pd_config):
+    pd_config["converted_rain_thr"] = 8.0
+    pd_config["input_quantity"] = "DBZH"
+    pd_config["run_options"]["steps_set_no_rain_to_value"] = -10
+    obs = np.array([[[np.nan, 5.0], [8.0, 30.0]]])
+    meta = {"unit": "dBZ", "transform": None, "threshold": -32, "zerovalue": -32}
+
+    prepared, prepared_meta = nowcasters.prepare_pysteps_observations(
+        obs, meta, pd_config
+    )
+
+    np.testing.assert_array_equal(prepared, [[[-10.0, -10.0], [8.0, 30.0]]])
+    assert prepared_meta["zerovalue"] == -10
+    assert prepared_meta["threshold"] == 8.0
+    # Inputs are kept intact
+    assert np.isnan(obs[0, 0, 0])
+    assert meta["zerovalue"] == -32

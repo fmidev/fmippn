@@ -1,8 +1,13 @@
 """Utility functions for FMI-PPN"""
 
 import datetime as dt
+import logging
+
 import numpy as np
 import h5py
+
+# Same logger as configured in ppn_logger; unconfigured, debug messages are dropped
+logger = logging.getLogger("FMIPPN")
 
 
 def pack_value(original_value, scale_factor, add_offset):
@@ -305,3 +310,48 @@ def store_odim_data_what_attrs(data_grp, metadata, scale_meta):
     data_what_grp.attrs["offset"] = scale_meta.get("offset")
     data_what_grp.attrs["nodata"] = scale_meta.get("nodata")
     data_what_grp.attrs["undetect"] = scale_meta.get("undetect")
+
+
+def transform_to_decibels(data, metadata, inverse=False):
+    """Transform data to decibel units. Assumes thresholded data.
+
+    If argument `inverse` is True, perform transform from decibel units to
+    normal units.
+    """
+    threshold = metadata["threshold"]
+    zerovalue = metadata["zerovalue"]
+    transform = metadata["transform"]
+
+    data = data.copy()
+    metadata = metadata.copy()
+
+    if inverse:
+        logger.debug("Converting data FROM dB units")
+        new_transform = None
+        new_threshold = 10.0 ** (threshold / 10.0)
+        new_zerovalue = 10.0 ** (zerovalue / 10.0)
+        data = 10.0 ** (data / 10.0)
+    else:
+        logger.debug("Converting data TO dB units")
+        new_transform = "dB"
+        new_threshold = 10.0 * np.log10(threshold)
+        new_zerovalue = 10.0 * np.log10(zerovalue)
+        data = 10.0 * np.log10(data)
+
+    metadata["transform"] = new_transform
+    metadata["zerovalue"] = new_zerovalue
+    metadata["threshold"] = new_threshold
+
+    return data, metadata
+
+
+def thresholding(data, metadata, threshold, norain_value, fill_nan=True):
+    """Set values under 'threshold' to 'norain_value'. Optionally replace np.nan with 'norain_value'."""
+    if fill_nan:
+        data[~np.isfinite(data)] = norain_value
+    data[data < threshold] = norain_value
+
+    metadata["zerovalue"] = norain_value
+    metadata["threshold"] = threshold
+
+    return data, metadata
