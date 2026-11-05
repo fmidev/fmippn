@@ -141,7 +141,23 @@ def _attrs_differ(a, b):
         va, vb = np.asarray(a[key]), np.asarray(b[key])
         if va.shape != vb.shape or not np.array_equal(va, vb):
             return f"attribute {key!r}: {a[key]!r} != {b[key]!r}"
+        # h5py reads e.g. null-padded and null-terminated strings to the same value
+        ta, tb = a.get_id(key).get_type(), b.get_id(key).get_type()
+        if ta != tb:
+            return f"attribute {key!r}: HDF5 type {_describe_type(ta)} != {_describe_type(tb)}"
     return None
+
+
+def _describe_type(tid):
+    if isinstance(tid, h5py.h5t.TypeStringID):
+        if tid.is_variable_str():
+            return "variable-length string"
+        pad = {
+            h5py.h5t.STR_NULLTERM: "null-terminated",
+            h5py.h5t.STR_NULLPAD: "null-padded",
+        }
+        return f"fixed {tid.get_size()}-byte {pad.get(tid.get_strpad(), 'space-padded')} string"
+    return str(tid.dtype)
 
 
 def compare_files(path_a, path_b):
