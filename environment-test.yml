@@ -1,0 +1,9 @@
+# Test-only additions on top of environment.yml:
+#   mamba env create -f environment.yml -n ppn-test
+#   mamba env update -f environment-test.yml -n ppn-test
+name: ppn-test
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - pytest

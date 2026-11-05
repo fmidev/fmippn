@@ -10,7 +10,7 @@ Currently this project DOES NOT adhere to [Semantic Versioning](https://semver.o
 
 ### Added
 
-- `pytest` test suite with golden-master tests comparing the output of the `finradfast-det` and `finradfast-ens` configurations against recorded baselines
+- `pytest` test suite (test environment: `environment.yml` + `environment-test.yml`) with golden-master tests comparing the output of the `finradfast-det` and `finradfast-ens` configurations against recorded baselines
 - `finradfast-det.json` and `finradfast-ens.json` configurations
 
 ### Changed

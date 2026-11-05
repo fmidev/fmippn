@@ -36,10 +36,12 @@ Branch `mlcast-forecasting` adds mlcast machine-learning models as a nowcast bac
 
 ## Running and verifying
 
-Run the tests from `fmippn/` in an environment built from `environment.yml`:
+Run the tests from `fmippn/` in a test environment: `environment.yml` plus the test-only `environment-test.yml`.
 
 ```sh
-python -m pytest tests
+mamba env create -f environment.yml -n ppn-test
+mamba env update -f environment-test.yml -n ppn-test
+cd fmippn && mamba run -n ppn-test python -m pytest tests
 ```
 
 - Unit tests cover the extracted pipeline functions and need no data.
@@ -53,5 +55,5 @@ Runtime gotchas: keep `OMP_NUM_THREADS=1` (OpenMP and dask conflict) and `HDF5_U
 
 - Format Python with `black` (default settings).
 - Record user-visible changes (new options, changed output, dependency bumps) as a dated entry in `fmippn/CHANGELOG.md`.
-- Dependencies live in `environment.yml` (pinned `pysteps`); the other `environment_*.yml` and `Dockerfile_*` files are historical variants.
+- Runtime dependencies live in `environment.yml` (pinned `pysteps`), which the production image is built from; keep it minimal. Test-only tools go in `environment-test.yml`. The `environment_*.yml` and `Dockerfile_*` files are historical variants.
 - Output HDF5 string attributes use `np.bytes_` (numpy ≥ 2).
