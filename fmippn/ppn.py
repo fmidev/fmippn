@@ -112,37 +112,14 @@ def run(timestamp=None, config=None, **kwargs):
     time_at_start = dt.datetime.today()
 
     # Observation data input
-    input_files = get_filelist(startdate, datasource)
-
-    if None in input_files[0]:
-
-        min_required_timesteps = run_options.get(
+    input_files = select_input_files(
+        startdate,
+        datasource,
+        run_options["num_prev_observations"],
+        run_options.get(
             "num_min_prev_observations", run_options["num_prev_observations"]
-        )
-
-        # Require at least min_required_timesteps valid input files (including the latest)
-        # at the end of the list
-        min_num_last_timesteps = input_files[0][-min_required_timesteps:]
-        if None in min_num_last_timesteps:
-            none_times = [
-                d for i, d in enumerate(input_files[1]) if input_files[0][i] is None
-            ]
-            raise FileNotFoundError(
-                f"Input data missing for {', '.join(str(i) for i in none_times)} at {datasource['root_path']}! "
-                f"At least {min_required_timesteps} previous time steps are required."
-            )
-        log(
-            "warning",
-            f"Some input data missing, but at least {min_required_timesteps} previous time steps are available. "
-            f"Missing timesteps: [{', '.join(str(d) for i, d in enumerate(input_files[1]) if input_files[0][i] is None)}]. "
-            f"Proceeding with nowcast.",
-        )
-        # Pick the last continuously valid input files
-        first_not_valid_step = input_files[0][::-1].index(None)
-        input_files = (
-            input_files[0][first_not_valid_step - 1 :],
-            input_files[1][first_not_valid_step - 1 :],
-        )
+        ),
+    )
 
     if datasource["importer"] in {"opera_hdf5", "odim_hdf5"}:
         input_quantity = datasource["importer_kwargs"]["qty"]
@@ -555,7 +532,7 @@ def generate_pysteps_setup(method="steps"):
     return nowcast_kwargs
 
 
-def get_filelist(startdate, datasource):
+def get_filelist(startdate, datasource, num_prev_observations):
     """Get a list of input file names"""
     try:
         filelist = pysteps.io.find_by_date(
@@ -565,7 +542,7 @@ def get_filelist(startdate, datasource):
             datasource["fn_pattern"],
             datasource["fn_ext"],
             datasource["timestep"],
-            num_prev_files=PD["run_options"]["num_prev_observations"],
+            num_prev_files=num_prev_observations,
         )
     except OSError as pysteps_error:
         error_msg = "Failed to read input data!"
@@ -573,6 +550,50 @@ def get_filelist(startdate, datasource):
         # Re-raise so traceback is shown in stdout and program stops
         raise OSError(error_msg) from pysteps_error
     return filelist
+
+
+def select_input_files(
+    startdate, datasource, num_prev_observations, num_min_prev_observations
+):
+    """Find the input files for a nowcast and handle missing observations.
+
+    Raise FileNotFoundError if any of the latest `num_min_prev_observations`
+    observations is missing. Otherwise, if observations are missing, trim the
+    file list.
+
+    Return a tuple (filenames, timestamps) as pysteps.io.find_by_date.
+    """
+    input_files = get_filelist(startdate, datasource, num_prev_observations)
+
+    if None in input_files[0]:
+
+        min_required_timesteps = num_min_prev_observations
+
+        # Require at least min_required_timesteps valid input files (including the latest)
+        # at the end of the list
+        min_num_last_timesteps = input_files[0][-min_required_timesteps:]
+        if None in min_num_last_timesteps:
+            none_times = [
+                d for i, d in enumerate(input_files[1]) if input_files[0][i] is None
+            ]
+            raise FileNotFoundError(
+                f"Input data missing for {', '.join(str(i) for i in none_times)} at {datasource['root_path']}! "
+                f"At least {min_required_timesteps} previous time steps are required."
+            )
+        log(
+            "warning",
+            f"Some input data missing, but at least {min_required_timesteps} previous time steps are available. "
+            f"Missing timesteps: [{', '.join(str(d) for i, d in enumerate(input_files[1]) if input_files[0][i] is None)}]. "
+            f"Proceeding with nowcast.",
+        )
+        # Pick the last continuously valid input files
+        first_not_valid_step = input_files[0][::-1].index(None)
+        input_files = (
+            input_files[0][first_not_valid_step - 1 :],
+            input_files[1][first_not_valid_step - 1 :],
+        )
+
+    return input_files
 
 
 def read_observations(filelist, datasource, importer):
