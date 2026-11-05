@@ -3,7 +3,6 @@
 import os
 
 import h5py
-import numpy as np
 
 import nowcasters
 import utils
@@ -157,24 +156,24 @@ def _write(data, filename, metadata, configuration, optype=None):
             amvu_grp = outf.create_group("/dataset1/data1")
             ds = amvu_grp.create_dataset("data", data=AMVU)
             # Add attributes to dataset to display as image in hdfview
-            ds.attrs["CLASS"] = np.bytes_("IMAGE")
-            ds.attrs["IMAGE_VERSION"] = np.bytes_("1.2")
+            utils.set_attr(ds.attrs, "CLASS", "IMAGE")
+            utils.set_attr(ds.attrs, "IMAGE_VERSION", "1.2")
             amvu_what_grp = amvu_grp.create_group("what")
-            amvu_what_grp.attrs["quantity"] = "AMVU"
+            utils.set_attr(amvu_what_grp.attrs, "quantity", "AMVU")
             amvu_how_grp = amvu_grp.create_group("how")
             for key, value in how_attrs.items():
-                amvu_how_grp.attrs[key] = value
+                utils.set_attr(amvu_how_grp.attrs, key, value)
 
             amvv_grp = outf.create_group("/dataset1/data2")
             ds = amvv_grp.create_dataset("data", data=AMVV)
             # Add attributes to dataset to display as image in hdfview
-            ds.attrs["CLASS"] = np.bytes_("IMAGE")
-            ds.attrs["IMAGE_VERSION"] = np.bytes_("1.2")
+            utils.set_attr(ds.attrs, "CLASS", "IMAGE")
+            utils.set_attr(ds.attrs, "IMAGE_VERSION", "1.2")
             amvv_what_grp = amvv_grp.create_group("what")
-            amvv_what_grp.attrs["quantity"] = "AMVV"
+            utils.set_attr(amvv_what_grp.attrs, "quantity", "AMVV")
             amvv_how_grp = amvv_grp.create_group("how")
             for key, value in how_attrs.items():
-                amvv_how_grp.attrs[key] = value
+                utils.set_attr(amvv_how_grp.attrs, key, value)
 
         # Write deterministic forecast timeseries in ODIM format
         elif optype == "det":
@@ -191,8 +190,8 @@ def _write(data, filename, metadata, configuration, optype=None):
                 data_grp = dset_grp.create_group("data1")
                 ds = data_grp.create_dataset("data", data=ts_point)
                 # Add attributes to dataset to display as image in hdfview
-                ds.attrs["CLASS"] = np.bytes_("IMAGE")
-                ds.attrs["IMAGE_VERSION"] = np.bytes_("1.2")
+                utils.set_attr(ds.attrs, "CLASS", "IMAGE")
+                utils.set_attr(ds.attrs, "IMAGE_VERSION", "1.2")
 
                 # Store data/what group attributes
                 utils.store_odim_data_what_attrs(data_grp, metadata, scale_meta)
@@ -224,8 +223,8 @@ def _write(data, filename, metadata, configuration, optype=None):
                     data_grp = dset_grp.create_group(f"data{eidx+1}")
                     ds = data_grp.create_dataset("data", data=ts_point)
                     # Add attributes to dataset to display as image in hdfview
-                    ds.attrs["CLASS"] = np.bytes_("IMAGE")
-                    ds.attrs["IMAGE_VERSION"] = np.bytes_("1.2")
+                    utils.set_attr(ds.attrs, "CLASS", "IMAGE")
+                    utils.set_attr(ds.attrs, "IMAGE_VERSION", "1.2")
 
                     # Store data/what group attributes
                     utils.store_odim_data_what_attrs(data_grp, metadata, scale_meta)
@@ -233,7 +232,7 @@ def _write(data, filename, metadata, configuration, optype=None):
             # Store PPN specific metadata into /how group
             how_grp.attrs["zr_a"] = configuration["data_options"]["zr_a"]
             how_grp.attrs["zr_b"] = configuration["data_options"]["zr_b"]
-            how_grp.attrs["seed"] = metadata.get("seed", "Unknown")
+            utils.set_attr(how_grp.attrs, "seed", metadata.get("seed", "Unknown"))
             how_grp.attrs["ensemble_size"] = configuration["ensemble_size"]
             # FIXME: "leadtimes" can be a list (irregular timesteps) -> take that into account
             how_grp.attrs["num_timesteps"] = configuration["run_options"]["leadtimes"]
@@ -244,6 +243,6 @@ def _write(data, filename, metadata, configuration, optype=None):
         if optype in ["det", "ens"]:
             # Write model specific metadata into /how group
             for key, value in nowcasters.method_how_attrs(configuration).items():
-                how_grp.attrs[key] = value
+                utils.set_attr(how_grp.attrs, key, value)
 
     return None

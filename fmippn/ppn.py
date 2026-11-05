@@ -859,8 +859,8 @@ def write_odim_output_separately(
     data_grp = dset_grp.create_group("data1")
     ds = data_grp.create_dataset("data", data=n_field)
     # Add attributes to dataset to display as image in hdfview
-    ds.attrs["CLASS"] = np.bytes_("IMAGE")
-    ds.attrs["IMAGE_VERSION"] = np.bytes_("1.2")
+    utils.set_attr(ds.attrs, "CLASS", "IMAGE")
+    utils.set_attr(ds.attrs, "IMAGE_VERSION", "1.2")
     # Store attributes in /dataset1/data1/what (offset, gain, nodata, undetect etc)
     utils.store_odim_data_what_attrs(data_grp, metadata, store_meta)
 
@@ -874,12 +874,12 @@ def write_odim_output_separately(
 
     # Write model specific metadata into /how group
     for key, value in nowcasters.method_how_attrs(PD).items():
-        how_grp.attrs[key] = value
+        utils.set_attr(how_grp.attrs, key, value)
 
     # Store ensemble forecast specific metadata
     if fc_type == "ens":
         how_grp.attrs["ensemble_size"] = PD["nowcast_options"]["n_ens_members"]
-        how_grp.attrs["seed"] = PD["nowcast_options"]["seed"]
+        utils.set_attr(how_grp.attrs, "seed", PD["nowcast_options"]["seed"])
 
 
 def process_callback_output(forecast):

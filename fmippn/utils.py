@@ -235,6 +235,25 @@ def get_odim_data_undetect(fname, quantity="DBZH"):
     )
 
 
+def c_string(string):
+    """Return keyword arguments for h5py AttributeManager.create() that store
+    `string` as a fixed-length null-terminated string, as in ODIM input."""
+    if isinstance(string, bytes):
+        string = string.decode("utf-8")
+    tid = h5py.h5t.C_S1.copy()  # pylint: disable=c-extension-no-member
+    tid.set_size(len(string.encode("utf-8")) + 1)
+    tid.set_strpad(h5py.h5t.STR_NULLTERM)  # pylint: disable=c-extension-no-member
+    return {"data": string, "shape": None, "dtype": h5py.Datatype(tid)}
+
+
+def set_attr(attrs, key, value):
+    """Set HDF5 attribute `key` to `value`, storing strings as C strings."""
+    if isinstance(value, (str, bytes)):
+        attrs.create(key, **c_string(value))
+    else:
+        attrs[key] = value
+
+
 def copy_odim_attributes(odim_metadata, outf):
     """Copy attribute groups /what, /where and /how from
     input ODIM HDF5 file to output ODIM HDF5 file as they are.
@@ -248,15 +267,15 @@ def copy_odim_attributes(odim_metadata, outf):
     # Copy attribute groups /what, /where and /how
     what = outf.create_group("what")
     for key, val in odim_metadata["what"].items():
-        what.attrs[key] = val
+        set_attr(what.attrs, key, val)
 
     where = outf.create_group("where")
     for key, val in odim_metadata["where"].items():
-        where.attrs[key] = val
+        set_attr(where.attrs, key, val)
 
     how = outf.create_group("how")
     for key, val in odim_metadata["how"].items():
-        how.attrs[key] = val
+        set_attr(how.attrs, key, val)
 
 
 def store_odim_dset_attrs(dset_grp, dset_index, startdate, timestep):
@@ -275,13 +294,13 @@ def store_odim_dset_attrs(dset_grp, dset_index, startdate, timestep):
 
     # Add attributes to each dataset
     dset_how_grp = dset_grp.create_group("how")
-    dset_how_grp.attrs["simulated"] = "True"
+    set_attr(dset_how_grp.attrs, "simulated", "True")
 
     dset_what_grp = dset_grp.create_group("what")
-    dset_what_grp.attrs["startdate"] = str(dt.datetime.strftime(valid_time, "%Y%m%d"))
-    dset_what_grp.attrs["enddate"] = str(dt.datetime.strftime(valid_time, "%Y%m%d"))
-    dset_what_grp.attrs["starttime"] = str(dt.datetime.strftime(valid_time, "%H%M%S"))
-    dset_what_grp.attrs["endtime"] = str(dt.datetime.strftime(valid_time, "%H%M%S"))
+    set_attr(dset_what_grp.attrs, "startdate", f"{valid_time:%Y%m%d}")
+    set_attr(dset_what_grp.attrs, "enddate", f"{valid_time:%Y%m%d}")
+    set_attr(dset_what_grp.attrs, "starttime", f"{valid_time:%H%M%S}")
+    set_attr(dset_what_grp.attrs, "endtime", f"{valid_time:%H%M%S}")
 
 
 def store_odim_data_what_attrs(data_grp, metadata, scale_meta):
@@ -305,7 +324,7 @@ def store_odim_data_what_attrs(data_grp, metadata, scale_meta):
 
     # Create data/what group and store metadata
     data_what_grp = data_grp.create_group("what")
-    data_what_grp.attrs["quantity"] = quantity
+    set_attr(data_what_grp.attrs, "quantity", quantity)
     data_what_grp.attrs["gain"] = scale_meta.get("gain")
     data_what_grp.attrs["offset"] = scale_meta.get("offset")
     data_what_grp.attrs["nodata"] = scale_meta.get("nodata")

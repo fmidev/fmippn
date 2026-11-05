@@ -56,4 +56,4 @@ Runtime gotchas: keep `OMP_NUM_THREADS=1` (OpenMP and dask conflict) and `HDF5_U
 - Format Python with `black` (default settings).
 - Record user-visible changes (new options, changed output, dependency bumps) as a dated entry in `fmippn/CHANGELOG.md`.
 - Runtime dependencies live in `environment.yml` (pinned `pysteps`), which the production image is built from; keep it minimal. Test-only tools go in `environment-test.yml`. The `environment_*.yml` and `Dockerfile_*` files are historical variants.
-- Output HDF5 string attributes use `np.bytes_` (numpy ≥ 2).
+- Write ODIM output attributes that may hold strings with `utils.set_attr()`: it stores strings as fixed-length null-terminated strings like the ODIM input. Plain `attrs[key] = "..."` gives variable-length strings and `np.bytes_` null-padded ones.

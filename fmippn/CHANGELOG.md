@@ -18,6 +18,7 @@ Currently this project DOES NOT adhere to [Semantic Versioning](https://semver.o
 - Nowcast methods are set up per deterministic and ensemble nowcast in the new module `nowcasters.py`, preparing for mlcast models
 - Deterministic-only runs no longer require `run_options.nowcast_method` to be `steps` or `linda`
 - `nowcast_options` is no longer modified while setting up the nowcast; method-specific options are merged into a copy
+- String attributes in ODIM output files are stored as fixed-length null-terminated strings, as in the ODIM input (previously variable-length strings for PPN metadata and null-padded strings for attributes copied from input)
 
 ## 2023-01-30
 
