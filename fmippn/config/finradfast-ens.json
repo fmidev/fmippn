@@ -1,0 +1,74 @@
+{
+  "data_source": {
+    "root_path": "/ppn_input",
+    "path_fmt": "",
+    "fn_pattern": "%Y%m%d%H%M_finland_cappi_600_dbzh_nowcast_qc",
+    "fn_ext": "h5",
+    "importer": "opera_hdf5",
+    "timestep": 5,
+    "importer_kwargs": {
+      "gzipped": false,
+      "qty": "DBZH"
+    }
+  },
+  "motion_options": {},
+  "data_options": {
+    "zr_a": 223.0,
+    "zr_b": 1.53,
+    "rain_threshold": -10
+  },
+  "output_options": {
+    "as_quantity": "DBZH",
+    "store_ensemble": true,
+    "store_deterministic": false,
+    "store_motion": true,
+    "store_perturbed_motion": true,
+    "use_old_format": false,
+    "path": "/output",
+    "convert_to_dtype": "uint16",
+    "gain": 0.01,
+    "offset": -327.68,
+    "set_undetect_value_to": 0,
+    "set_nodata_value_to": 65535,
+    "write_leadtimes_separately": true,
+    "write_asap": true
+  },
+  "run_options": {
+    "leadtimes": null,
+    "nowcast_timestep": 5,
+    "num_prev_observations": 3,
+    "max_leadtime": 240,
+    "run_deterministic": false,
+    "run_ensemble": true,
+    "regenerate_perturbed_motion": true,
+    "motion_method": "lucaskanade",
+    "nowcast_method": "steps",
+    "deterministic_method": "extrapolation",
+    "forecast_as_quantity": "DBZH",
+    "steps_set_no_rain_to_value": -16,
+    "steps_fill_nan": false
+  },
+  "nowcast_options": {
+    "kmperpixel": 1.0,
+    "timestep": 5,
+    "fft_method": "pyfftw",
+    "n_ens_members": 5,
+    "n_cascade_levels": 8,
+    "num_workers": 5,
+    "domain": "spectral",
+    "vel_pert_method": "bps",
+    "vel_pert_kwargs": {
+      "p_par": [0, 0, 0],
+      "p_perp": [0, 0, 0]
+    },
+    "seed": "random"
+  },
+  "callback_options": {
+    "tmp_folder": ""
+  },
+  "logging": {
+    "write_log": true,
+    "log_level": 10,
+    "log_folder": "/log"
+  }
+}

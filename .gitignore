@@ -173,3 +173,7 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+# Golden-master test input and baselines (local only)
+testdata/odim/
+testdata/golden/

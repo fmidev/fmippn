@@ -15,4 +15,5 @@ dependencies:
   - dask
   - pyfftw
   - pyproj
+  - pytest
   - pip
