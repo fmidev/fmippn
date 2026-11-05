@@ -17,10 +17,12 @@ generating the file is to run following command on command line:
 
 /path/to/fmippn/source$ python -c "import ppn_config; ppn_config.dump_defaults()"
 """
+
 import logging
 import json
 from pathlib import Path
 from json.decoder import JSONDecodeError
+
 
 # Overriding defaults with configuration from file
 def get_config(override_name=None):

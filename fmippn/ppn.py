@@ -10,6 +10,7 @@ Original code by Petteri Karsisto, 2019
 ODIM output option and callback function added by Tuuli Perttula, 2021
 
 """
+
 import datetime as dt
 import random
 from pathlib import Path
@@ -115,13 +116,17 @@ def run(timestamp=None, config=None, **kwargs):
 
     if None in input_files[0]:
 
-        min_required_timesteps = run_options.get("num_min_prev_observations", run_options["num_prev_observations"])
+        min_required_timesteps = run_options.get(
+            "num_min_prev_observations", run_options["num_prev_observations"]
+        )
 
         # Require at least min_required_timesteps valid input files (including the latest)
         # at the end of the list
         min_num_last_timesteps = input_files[0][-min_required_timesteps:]
         if None in min_num_last_timesteps:
-            none_times = [d for i, d in enumerate(input_files[1]) if input_files[0][i] is None]
+            none_times = [
+                d for i, d in enumerate(input_files[1]) if input_files[0][i] is None
+            ]
             raise FileNotFoundError(
                 f"Input data missing for {', '.join(str(i) for i in none_times)} at {datasource['root_path']}! "
                 f"At least {min_required_timesteps} previous time steps are required."
@@ -207,13 +212,22 @@ def run(timestamp=None, config=None, **kwargs):
         log("info", "Regenerating ensemble motion fields...")
         ensemble_motion = regenerate_ensemble_motion(motion_field, nowcast_kwargs)
         log("info", "Finished regeneration.")
-        if output_options.get("store_perturbed_motion", False) and output_options.get("write_asap", False):
+        if output_options.get("store_perturbed_motion", False) and output_options.get(
+            "write_asap", False
+        ):
             for ens_member in range(PD["nowcast_options"]["n_ens_members"]):
                 perturb_motion_output_fname = output_options["path"].joinpath(
-                    nc_fname_templ.format(date=startdate, tag=f"motion-ensmem={ens_member+1}", config=config)
+                    nc_fname_templ.format(
+                        date=startdate,
+                        tag=f"motion-ensmem={ens_member+1}",
+                        config=config,
+                    )
                 )
                 odim_io.write_motion_to_file(
-                    PD, ensemble_motion[ens_member], perturb_motion_output_fname, metadata=asap_meta
+                    PD,
+                    ensemble_motion[ens_member],
+                    perturb_motion_output_fname,
+                    metadata=asap_meta,
                 )
         # Release memory
         ensemble_motion = None
@@ -222,7 +236,7 @@ def run(timestamp=None, config=None, **kwargs):
 
     # If seed is none, make a random seed.
     if PD["nowcast_options"].get("seed") is None:
-        PD["nowcast_options"]["seed"] = random.randrange(2 ** 32 - 1)
+        PD["nowcast_options"]["seed"] = random.randrange(2**32 - 1)
 
     if run_options.get("run_deterministic"):
         # Get correct input slice for deterministic nowcast
@@ -520,7 +534,7 @@ def generate_pysteps_setup(method="steps"):
         log("info", 'Converted RATE rain_threshold to decibel units ("dBR").')
     elif utils.quantity_is_rate(input_qty) and utils.quantity_is_dbzh(fct_qty):
         # Transform threshold, given in rain rate, to dBZ
-        r_thr = 10 * np.log10(zr_a * r_thr ** zr_b)
+        r_thr = 10 * np.log10(zr_a * r_thr**zr_b)
 
     PD["converted_rain_thr"] = r_thr  # DBZH or non-decibel RATE is used in thresholding
 
@@ -725,7 +739,7 @@ def _convert_for_output(value, out_qty):
 
     elif utils.quantity_is_rate(in_qty) and utils.quantity_is_dbzh(out_qty):
         # Z = zr_a * R ** zr_b
-        value = zr_a * value ** zr_b
+        value = zr_a * value**zr_b
         # dBZ = 10 * log10(Z)
         value = 10 * np.log10(value)
 
@@ -1069,9 +1083,11 @@ def write_to_file(startdate, gen_output, nc_fname, metadata=None):
         old_style_configs = {
             # Method selections
             # "DOMAIN": "fmi", # postprocessing defines this instead of reading it here
-            "VALUE_DOMAIN": "rrate"
-            if PD["run_options"]["forecast_as_quantity"] == "RATE"
-            else "dbz",  # Unused?
+            "VALUE_DOMAIN": (
+                "rrate"
+                if PD["run_options"]["forecast_as_quantity"] == "RATE"
+                else "dbz"
+            ),  # Unused?
             # Z-R conversion parameters
             "ZR_A": PD["data_options"]["zr_a"],  #
             "ZR_B": PD["data_options"]["zr_b"],  #
