@@ -27,9 +27,9 @@ import h5py
 import numpy as np
 
 FMIPPN_DIR = Path(__file__).resolve().parents[1]
-REPO_DIR = FMIPPN_DIR.parent
-INPUT_DIR = Path(os.environ.get("FMIPPN_TEST_INPUT", REPO_DIR / "testdata" / "odim"))
-GOLDEN_DIR = Path(os.environ.get("FMIPPN_GOLDEN_DIR", REPO_DIR / "testdata" / "golden"))
+TESTDATA_DIR = FMIPPN_DIR / "tests" / "testdata"
+INPUT_DIR = Path(os.environ.get("FMIPPN_TEST_INPUT", TESTDATA_DIR / "odim"))
+GOLDEN_DIR = Path(os.environ.get("FMIPPN_GOLDEN_DIR", TESTDATA_DIR / "golden"))
 
 # Overrides applied to every case: short leadtimes, few members, fixed seed
 COMMON_OVERRIDES = {
@@ -108,11 +108,25 @@ def run_case(name, output_dir, input_dir=INPUT_DIR):
         else:
             case_input = Path(input_dir).resolve()
 
-        config_path = make_config(base, overrides, case_input, output_dir, tmp)
-        env = dict(os.environ, OMP_NUM_THREADS="1", HDF5_USE_FILE_LOCKING="FALSE")
+        make_config(base, overrides, case_input, output_dir, tmp)
+        env = dict(
+            os.environ,
+            OMP_NUM_THREADS="1",
+            HDF5_USE_FILE_LOCKING="FALSE",
+            PYSTEPSRC=str(FMIPPN_DIR / "pystepsrc"),
+        )
+        # The config name ends up in output filenames, so run from the config
+        # folder and pass the bare name as in operational runs
         subprocess.run(
-            [sys.executable, "run_ppn.py", "-c", str(config_path), "-t", timestamp],
-            cwd=FMIPPN_DIR,
+            [
+                sys.executable,
+                str(FMIPPN_DIR / "run_ppn.py"),
+                "-c",
+                base,
+                "-t",
+                timestamp,
+            ],
+            cwd=tmp,
             env=env,
             check=True,
         )
