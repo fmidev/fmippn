@@ -5,6 +5,7 @@ import os
 import h5py
 import numpy as np
 
+import nowcasters
 import utils
 from ppn_config import defaults
 
@@ -242,23 +243,7 @@ def _write(data, filename, metadata, configuration, optype=None):
 
         if optype in ["det", "ens"]:
             # Write model specific metadata into /how group
-            if configuration["run_options"]["nowcast_method"] == "steps":
-                how_grp.attrs["ensemble_nowcast_method"] = "steps"
-                how_grp.attrs["domain"] = configuration["nowcast_options"]["domain"]
-                default_cascade_levels = defaults["nowcast_options"]["n_cascade_levels"]
-                how_grp.attrs["n_cascade_levels"] = configuration[
-                    "nowcast_options"
-                ].get("n_cascade_levels", default_cascade_levels)
-            elif configuration["run_options"]["nowcast_method"] == "linda":
-                how_grp.attrs["ensemble_nowcast_method"] = "linda"
-                how_grp.attrs["feature_method"] = configuration["nowcast_options"][
-                    "feature_method"
-                ]
-                how_grp.attrs["ari_order"] = str(
-                    configuration["nowcast_options"]["ari_order"]
-                )
-                how_grp.attrs["max_num_features"] = str(
-                    configuration["nowcast_options"]["max_num_features"]
-                )
+            for key, value in nowcasters.method_how_attrs(configuration).items():
+                how_grp.attrs[key] = value
 
     return None

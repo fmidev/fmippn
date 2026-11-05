@@ -24,6 +24,7 @@ import ppn_logger
 import ppn_config
 import utils
 import odim_io
+import nowcasters
 
 # Global objects for storing and accessing configuration parameters
 PD = dict()
@@ -136,6 +137,8 @@ def run(timestamp=None, config=None, **kwargs):
     PD["data_undetect"] = data_undetect
     PD["input_quantity"] = input_quantity
 
+    resolve_seed(run_options.get("regenerate_perturbed_motion"))
+
     # generate suitable objects for passing to pysteps methods
     # based on the selected model
     if run_options["nowcast_method"] in ["steps", "linda"]:
@@ -181,11 +184,6 @@ def run(timestamp=None, config=None, **kwargs):
 
     # Regenerate ensemble motion
     if run_options.get("regenerate_perturbed_motion"):
-        if PD["nowcast_options"].get("seed") is None:
-            raise ValueError("Cannot regenerate motion field with unknown seed value!")
-        elif PD["nowcast_options"].get("seed") == "random":
-            PD["nowcast_options"]["seed"] = random.randrange(2**32 - 1)
-
         log("info", "Regenerating ensemble motion fields...")
         ensemble_motion = regenerate_ensemble_motion(motion_field, nowcast_kwargs)
         log("info", "Finished regeneration.")
@@ -210,10 +208,6 @@ def run(timestamp=None, config=None, **kwargs):
         ensemble_motion = None
     else:
         ensemble_motion = None
-
-    # If seed is none, make a random seed.
-    if PD["nowcast_options"].get("seed") is None:
-        PD["nowcast_options"]["seed"] = random.randrange(2**32 - 1)
 
     if run_options.get("run_deterministic"):
         # Get correct input slice for deterministic nowcast
@@ -379,6 +373,24 @@ def run(timestamp=None, config=None, **kwargs):
     log("info", "Run complete. Exiting.")
 
 
+def resolve_seed(regenerate_perturbed_motion):
+    """Replace a missing seed in nowcast_options with a random one.
+
+    Regenerating perturbed motion needs a known seed: then None is an error
+    and "random" is replaced with a random seed.
+    """
+    nowcast_options = PD["nowcast_options"]
+    if regenerate_perturbed_motion:
+        if nowcast_options.get("seed") is None:
+            raise ValueError("Cannot regenerate motion field with unknown seed value!")
+        elif nowcast_options.get("seed") == "random":
+            nowcast_options["seed"] = random.randrange(2**32 - 1)
+
+    # If seed is none, make a random seed.
+    if nowcast_options.get("seed") is None:
+        nowcast_options["seed"] = random.randrange(2**32 - 1)
+
+
 def initialise_logging(log_folder="./", log_fname="ppn.log"):
     """Wrapper for ppn_logger.config_logging() method. Does nothing if writing
     to log is not enabled."""
@@ -483,12 +495,8 @@ def deterministic_method(module="pysteps", **kwargs):
 def generate_pysteps_setup(method="steps"):
     """Generate `nowcast_kwargs` objects that are suitable
     for using in pysteps nowcasting methods."""
-    # kwargs for nowcasting method
-    nowcast_kwargs = PD.get("nowcast_options")
-
-    # Get options for this model specifically
-    nowcast_kwargs.update(nowcast_kwargs.get("method_specific_options").get(method))
-    nowcast_kwargs.pop("method_specific_options", None)
+    # kwargs for nowcasting method: common and method-specific options as a new dictionary
+    nowcast_kwargs = nowcasters.method_options(PD["nowcast_options"], method)
 
     # This threshold is used in masking and probability masking
     # rrate units need to be transformed to decibel, so that comparisons can be done
@@ -694,6 +702,15 @@ def generate(observations, motion_field, nowcaster, nowcast_kwargs, metadata=Non
     else:
         forecast = output
 
+    return postprocess_forecast(forecast, metadata)
+
+
+def postprocess_forecast(forecast, metadata):
+    """Convert a nowcast from the forecast quantity to the output quantity and
+    threshold it for output.
+
+    Return a tuple (forecast, metadata).
+    """
     if (metadata["unit"] == "mm/h") and (metadata["transform"] == "dB"):
         forecast, meta = transform_to_decibels(forecast, metadata, inverse=True)
     else:
@@ -872,7 +889,20 @@ def cb_nowcast(field):
     # Count calls from pysteps, used for calculating the timestamp.
     n_timestep = cb_nowcast.counter
     cb_nowcast.counter += 1
+    write_ensemble_leadtime(field, n_timestep)
 
+
+# Initialize callback function counter
+cb_nowcast.counter = 0
+
+
+def write_ensemble_leadtime(field, n_timestep):
+    """Store the ensemble members of one leadtime to their own HDF5 files.
+
+    Input:
+        field -- forecast for one leadtime, shape (members, y, x), in forecast quantity
+        n_timestep -- leadtime index (0 is the first leadtime)
+    """
     input_timestep = PD["data_source"]["timestep"]
     leadtimes = PD["run_options"]["leadtimes"]
 
@@ -898,10 +928,6 @@ def cb_nowcast(field):
             write_odim_output_separately(
                 f, n_timestep, field[i, :, :], metadata, store_meta, fc_type="ens"
             )
-
-
-# Initialize callback function counter
-cb_nowcast.counter = 0
 
 
 def write_odim_output_separately(
@@ -945,17 +971,8 @@ def write_odim_output_separately(
     how_grp.attrs["max_leadtime"] = PD["run_options"]["max_leadtime"]
 
     # Write model specific metadata into /how group
-    if PD["run_options"]["nowcast_method"] == "steps":
-        how_grp.attrs["ensemble_nowcast_method"] = "steps"
-        how_grp.attrs["domain"] = PD["nowcast_options"]["domain"]
-        how_grp.attrs["n_cascade_levels"] = PD["nowcast_options"]["n_cascade_levels"]
-    elif PD["run_options"]["nowcast_method"] == "linda":
-        how_grp.attrs["ensemble_nowcast_method"] = "linda"
-        how_grp.attrs["feature_method"] = PD["nowcast_options"]["feature_method"]
-        how_grp.attrs["ari_order"] = str(PD["nowcast_options"]["ari_order"])
-        how_grp.attrs["max_num_features"] = str(
-            PD["nowcast_options"]["max_num_features"]
-        )
+    for key, value in nowcasters.method_how_attrs(PD).items():
+        how_grp.attrs[key] = value
 
     # Store ensemble forecast specific metadata
     if fc_type == "ens":
@@ -964,50 +981,9 @@ def write_odim_output_separately(
 
 
 def process_callback_output(forecast):
-    """
-    Copied everything except pysteps call from generate function.
-    """
-
+    """Post-process a callback leadtime field and prepare it for writing."""
     # Get metadata from PD_callback global dictionary
-    metadata = PD_callback["obs_metadata"]
-
-    if (metadata["unit"] == "mm/h") and (metadata["transform"] == "dB"):
-        forecast, meta = transform_to_decibels(forecast, metadata, inverse=True)
-    else:
-        meta = metadata
-
-    out_qty = PD["output_options"].get("as_quantity", None)
-    if out_qty is None:
-        out_qty = PD["input_quantity"]
-
-    if utils.quantity_is_dbzh(out_qty) and metadata["unit"] == "mm/h":
-        forecast, meta = rrate_to_dbz(forecast, meta)
-
-    elif utils.quantity_is_rate(out_qty) and metadata["unit"] == "dBZ":
-        forecast, meta = dbz_to_rrate(forecast, meta)
-        # Might need to convert the norain value and threshold, too
-    if "out_rain_threshold" not in PD:
-        _rain_threshold = PD["data_options"].get("rain_threshold")
-        PD["out_rain_threshold"] = _convert_for_output(_rain_threshold, out_qty)
-
-    if "out_norain_value" not in PD:
-        _norain = PD["output_options"].get("set_undetect_value_to", "input")
-        if _norain == "input":
-            _norain = PD["data_undetect"]
-            PD["out_norain_value"] = _convert_for_output(_norain, out_qty)
-        else:
-            PD["out_norain_value"] = _norain
-
-    rain_threshold = PD["out_rain_threshold"]
-    norain_for_output = PD["out_norain_value"]
-
-    forecast, meta = thresholding(
-        forecast,
-        meta,
-        threshold=rain_threshold,
-        norain_value=norain_for_output,
-        fill_nan=False,
-    )
+    forecast, meta = postprocess_forecast(forecast, PD_callback["obs_metadata"])
 
     forecast, store_meta = prepare_data_for_writing(forecast)
 
@@ -1041,6 +1017,9 @@ def write_to_file(startdate, gen_output, nc_fname, metadata=None):
         return None
 
     output_options = PD["output_options"]
+    nowcast_options = nowcasters.method_options(
+        PD["nowcast_options"], PD["run_options"]["nowcast_method"]
+    )
     # We don't support irregular nowcast outputs here
     nowcast_timestep = get_timesteps()
 
@@ -1117,12 +1096,12 @@ def write_to_file(startdate, gen_output, nc_fname, metadata=None):
             "MAX_LEADTIME": PD["run_options"]["max_leadtime"],  #
             "NUM_TIMESTEPS": PD["run_options"]["leadtimes"],  #
             "ENSEMBLE_SIZE": PD["ensemble_size"],  #
-            "NUM_CASCADES": PD["nowcast_options"].get("n_cascade_levels", 6),  # Unused?
+            "NUM_CASCADES": nowcast_options.get("n_cascade_levels", 6),  # Unused?
             "RAIN_THRESHOLD": PD["out_rain_threshold"],  # Unused?
             "NORAIN_VALUE": PD["out_norain_value"],  #
-            "KMPERPIXEL": PD["nowcast_options"]["kmperpixel"],  # Unused?
-            "CALCULATION_DOMAIN": PD["nowcast_options"]["domain"],  # Unused?
-            "VEL_PERT_KWARGS": PD["nowcast_options"]["vel_pert_kwargs"],
+            "KMPERPIXEL": nowcast_options["kmperpixel"],  # Unused?
+            "CALCULATION_DOMAIN": nowcast_options["domain"],  # Unused?
+            "VEL_PERT_KWARGS": nowcast_options["vel_pert_kwargs"],
             # Storing parameters
             "FIELD_VALUES": PD["output_options"]["as_quantity"],  # Unused?
             "STORE_DETERMINISTIC": output_options["store_deterministic"],  #
